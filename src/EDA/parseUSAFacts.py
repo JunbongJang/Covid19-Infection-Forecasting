@@ -67,7 +67,7 @@ def cumulativeCasesToVelocity(file_type, processed_df):
     return velocity_df
 
 
-def findNegativeVelocityCounties(velocity_df):
+def findNegativeVelocityCounties(velocity_df, file_type):
     wrong_state_county_list = []
     for state_county in velocity_df.columns.tolist():
         is_data_wrong = (velocity_df[state_county].values < 0).any()
@@ -81,12 +81,15 @@ def findNegativeVelocityCounties(velocity_df):
 
 
 if __name__ == "__main__":
-    for file_type in ['population', 'cases', 'deaths']:
-        download_raw_data(file_type = file_type)
-        processed_df = parseData(file_type=file_type)
-        if file_type != 'population':
-            velocity_df = cumulativeCasesToVelocity(file_type=file_type, processed_df = processed_df)
-            velocity_df = pd.read_csv(f'../../generated/us_velocity_{file_type}_counties.csv', header=0, index_col=0)
-            findNegativeVelocityCounties(velocity_df = velocity_df)
+
+    processed_df = parseData(file_type='cases')
+
+    # for file_type in ['population', 'cases', 'deaths']:
+    #     download_raw_data(file_type = file_type)
+    #     processed_df = parseData(file_type=file_type)
+    #     if file_type != 'population':
+    #         velocity_df = cumulativeCasesToVelocity(file_type=file_type, processed_df = processed_df)
+    #         velocity_df = pd.read_csv(f'../../generated/us_velocity_{file_type}_counties.csv', header=0, index_col=0)
+    #         findNegativeVelocityCounties(velocity_df = velocity_df, file_type)
 
 

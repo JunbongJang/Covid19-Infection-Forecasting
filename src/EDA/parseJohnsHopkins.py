@@ -253,14 +253,27 @@ def state_to_abbr(a_state):
 
     return state_dict[a_state]['state_abbr']
 
+
+def johnsHopkinsPopulation():
+    population_df = pd.read_csv(f'../../assets/us_population_counties_jh.csv', header=0, index_col=False)
+    population_df['State'] = population_df['State'].apply(state_to_abbr)
+    population_df['state_county'] = population_df[['State', 'County']].agg('_'.join, axis=1)
+    population_df = population_df.set_index('state_county')
+    population_series = population_df['Number']
+
+    return population_series
+
+
 def getTzuHsiCluster(chosen_cluster_id):
-    clusters_df = pd.read_csv(f'../../assets/us_county_clusters.csv', header=0, index_col=False)
+    clusters_df = pd.read_csv(f'../../assets/us_county_clusters_0531.csv', header=0, index_col=False)
     clusters_df['State'] = clusters_df['State'].apply(state_to_abbr)
     clusters_df['state_county'] = clusters_df[['State', 'County']].agg('_'.join, axis=1)
     clusters_df = clusters_df.set_index('state_county')
     clusters_series = clusters_df['Cluster_idx']
 
-    chosen_clusters_series = clusters_series[clusters_series == chosen_cluster_id]
+    chosen_clusters_series = clusters_series
+    if chosen_cluster_id != -1:
+        chosen_clusters_series = clusters_series[clusters_series == chosen_cluster_id]
 
     return chosen_clusters_series.index.tolist()
 

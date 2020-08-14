@@ -73,7 +73,7 @@ def get_counties_with_rapid_increase(df):
 
 
 if __name__ == "__main__":
-    cases_data = pd.read_csv('../../generated/us_cases_counties.csv', header=0, index_col=0)
+    cases_data = pd.read_csv('../../generated/us_cases_counties_0531.csv', header=0, index_col=0)
     velocity_data = pd.read_csv('../../generated/us_velocity_proc_cases_counties.csv', header=0, index_col=0)
 
     selected_county_list = get_counties_with_n_cases(cases_data, num_cases=-1, days_before=0)
