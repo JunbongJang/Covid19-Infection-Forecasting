@@ -15,329 +15,43 @@ import pymc3 as pm
 import os
 import matplotlib.pyplot as plt
 
-from src.Forecast.plotting import *
-from . import model_helper as mh
+from src.Forecast.Bayesian_Inference_plotting import *
+import src.Forecast.Bayesian_Inference_SEIR_helper as model_helper
+from src.Forecast.Bayesian_Inference_SEIR_changepoints import get_change_points
     
     
-def run_bayesian_inference_SEIR(date_array, cluster_vel_cases_df, cluster_mean_population, cluster_id, N_SAMPLES):
-    if cluster_id == -1:
-        prior_date_1 = datetime.datetime(2020, 4, 3)
-        prior_date_2 = datetime.datetime(2020, 4, 24)
-        prior_date_3 = datetime.datetime(2020, 5, 17)
-        prior_date_4 = datetime.datetime(2020, 5, 25)
-
-        change_points = [dict(pr_mean_date_begin_transient=prior_date_1,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_2,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_3,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_4,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5)]
-
-    if cluster_id == 1:
-        prior_date_1 = datetime.datetime(2020, 4, 10)
-        prior_date_2 = datetime.datetime(2020, 4, 24)
-        prior_date_3 = datetime.datetime(2020, 5, 15)
-        prior_date_4 = datetime.datetime(2020, 5, 25)
-
-        change_points = [dict(pr_mean_date_begin_transient=prior_date_1,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_2,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_3,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_4,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5)]
-    elif cluster_id == 2:
-        prior_date_1 = datetime.datetime(2020, 4, 3)
-        prior_date_2 = datetime.datetime(2020, 4, 19)
-        prior_date_3 = datetime.datetime(2020, 5, 6)
-        prior_date_4 = datetime.datetime(2020, 5, 24)
-
-        change_points = [dict(pr_mean_date_begin_transient=prior_date_1,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_2,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_3,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_4,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5)]
-    elif cluster_id == 3:
-        prior_date_1 = datetime.datetime(2020, 4, 3)
-        prior_date_2 = datetime.datetime(2020, 4, 19)
-        prior_date_3 = datetime.datetime(2020, 5, 7)
-        prior_date_4 = datetime.datetime(2020, 5, 22)
-
-        change_points = [dict(pr_mean_date_begin_transient=prior_date_1,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_2,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_3,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_4,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5)]
-
-    if cluster_id == 4:
-        prior_date_1 = datetime.datetime(2020, 4, 3)
-        prior_date_2 = datetime.datetime(2020, 4, 19)
-        prior_date_3 = datetime.datetime(2020, 5, 15)
-        prior_date_4 = datetime.datetime(2020, 5, 25)
-
-        change_points = [dict(pr_mean_date_begin_transient=prior_date_1,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_2,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_3,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_4,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5)]
-    elif cluster_id == 5:
-        prior_date_1 = datetime.datetime(2020, 3, 24)
-        prior_date_2 = datetime.datetime(2020, 4, 9)
-        prior_date_3 = datetime.datetime(2020, 4, 23)
-        prior_date_4 = datetime.datetime(2020, 5, 15)
-
-        change_points = [dict(pr_mean_date_begin_transient=prior_date_1,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_2,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_3,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_4,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5)]
-
-    elif cluster_id == 6:
-        prior_date_1 = datetime.datetime(2020, 4, 7)
-        prior_date_2 = datetime.datetime(2020, 4, 26)
-        prior_date_3 = datetime.datetime(2020, 5, 12)
-        prior_date_4 = datetime.datetime(2020, 5, 24)
-
-        change_points = [dict(pr_mean_date_begin_transient=prior_date_1,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_2,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_3,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_4,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5)]
-
-    elif cluster_id == 7:
-        prior_date_1 = datetime.datetime(2020, 3, 30)
-        prior_date_2 = datetime.datetime(2020, 4, 16)
-        prior_date_3 = datetime.datetime(2020, 5, 9)
-        prior_date_4 = datetime.datetime(2020, 5, 22)
-
-        change_points = [dict(pr_mean_date_begin_transient=prior_date_1,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_2,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_3,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_4,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5)]
-
-    elif cluster_id == 8:
-        prior_date_1 = datetime.datetime(2020, 4, 2)
-        prior_date_2 = datetime.datetime(2020, 4, 14)
-        prior_date_3 = datetime.datetime(2020, 5, 8)
-        prior_date_4 = datetime.datetime(2020, 5, 19)
-
-        change_points = [dict(pr_mean_date_begin_transient=prior_date_1,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_2,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_3,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_4,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5)]
-
-    elif cluster_id == 9:
-        prior_date_1 = datetime.datetime(2020, 3, 27)
-        prior_date_2 = datetime.datetime(2020, 4, 14)
-        prior_date_3 = datetime.datetime(2020, 4, 29)
-        prior_date_4 = datetime.datetime(2020, 5, 19)
-
-        change_points = [dict(pr_mean_date_begin_transient=prior_date_1,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_2,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_3,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_4,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5)]
-
-    elif cluster_id == 10:
-        prior_date_1 = datetime.datetime(2020, 4, 10)
-        prior_date_2 = datetime.datetime(2020, 4, 24)
-        prior_date_3 = datetime.datetime(2020, 5, 15)
-        prior_date_4 = datetime.datetime(2020, 5, 25)
-
-        change_points = [dict(pr_mean_date_begin_transient=prior_date_1,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_2,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_3,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_4,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5)]
-    elif cluster_id == 11:
-        prior_date_1 = datetime.datetime(2020, 3, 27)
-        prior_date_2 = datetime.datetime(2020, 4, 14)
-        prior_date_3 = datetime.datetime(2020, 5, 12)
-        prior_date_4 = datetime.datetime(2020, 5, 22)
-
-        change_points = [dict(pr_mean_date_begin_transient=prior_date_1,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_2,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_3,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_4,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5)]
-
-    elif cluster_id == 12:
-        prior_date_1 = datetime.datetime(2020, 3, 27)
-        prior_date_2 = datetime.datetime(2020, 4, 14)
-        prior_date_3 = datetime.datetime(2020, 5, 12)
-        prior_date_4 = datetime.datetime(2020, 5, 22)
-
-        change_points = [dict(pr_mean_date_begin_transient=prior_date_1,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_2,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_3,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5),
-                         dict(pr_mean_date_begin_transient=prior_date_4,
-                              pr_sigma_date_begin_transient=1,
-                              pr_median_lambda=0.2,
-                              pr_sigma_lambda=0.5)]
-
-
+def run_bayesian_inference_SEIR(cluster_vel_cases_df, cluster_mean_population, cluster_id, initial_date, final_date, root_save_path, N_SAMPLES):
+    
+    change_points = get_change_points(final_date=final_date, cluster_id=cluster_id)
+    
     diff_data_sim = 0 # should be significantly larger than the expected delay, in 
                    # order to always fit the same number of data points.
-    num_days_future = 28
-    date_data_begin = datetime.datetime.strptime(date_array[0], '%m/%d/%y')
-    date_data_end = datetime.datetime.strptime(date_array[-1], '%m/%d/%y')
+    num_days_future = 14
+    date_data_begin = datetime.datetime.strptime(initial_date, '%m/%d/%Y')
+    date_data_end = datetime.datetime.strptime(final_date, '%m/%d/%Y')
     
     date_begin_sim = date_data_begin - datetime.timedelta(days = diff_data_sim)
     date_end_sim   = date_data_end   + datetime.timedelta(days = num_days_future) 
     
-    num_days_sim = (date_end_sim-date_begin_sim).days
-
+    num_days_sim = (date_end_sim-date_begin_sim + datetime.timedelta(days=1)).days
+    print(date_begin_sim)
+    print(date_end_sim)
+    print(date_data_begin)
+    print(date_data_end)
+    # min-max normalize data
+    for a_column in cluster_vel_cases_df.columns:
+        cluster_vel_cases_df[a_column] = (cluster_vel_cases_df[a_column] - cluster_vel_cases_df[a_column].min()) / (cluster_vel_cases_df[a_column].max() - cluster_vel_cases_df[a_column].min())
+    localized_vel_cases_df = cluster_vel_cases_df.loc[date_data_begin: date_data_end]
+    future_vel_cases_df = cluster_vel_cases_df.loc[date_data_end + datetime.timedelta(days = 1): date_end_sim]
+    print(localized_vel_cases_df.shape)
+    print(future_vel_cases_df.shape)
     
-    cluster_vel_cases_df = cluster_vel_cases_df.loc[date_array[0]: date_array[-1]]
-    cluster_vel_cases_series = cluster_vel_cases_df.mean(axis=1)
-    cluster_vel_cases_array = cluster_vel_cases_series.to_numpy()
-    
-    cluster_vel_cases_array = cluster_vel_cases_array
-    cluster_mean_population = cluster_mean_population
+    localized_mean_vel_cases_series = localized_vel_cases_df.mean(axis=1)
+    future_mean_vel_cases_series = future_vel_cases_df.mean(axis=1)
 
     # ---------------- param setting done--------------
     
-    sir_model = SIR_with_change_points(cluster_vel_cases_array,
+    sir_model = SIR_with_change_points(localized_mean_vel_cases_series.to_numpy(),
                                             change_points_list=change_points,
                                             date_begin_simulation = date_begin_sim,
                                             num_days_sim = num_days_sim,
@@ -347,7 +61,7 @@ def run_bayesian_inference_SEIR(date_array, cluster_vel_cases_df, cluster_mean_p
     with sir_model:
         trace = pm.sample(N_SAMPLES, model=sir_model, step=pm.Metropolis())
     
-    # -------- visualize ---------------
+    # -------- visualize ready ---------------
     varnames = get_all_free_RVs_names(sir_model)
     #for varname in varnames:
         #visualize_trace(trace[varname][:, None], varname, N_SAMPLES)
@@ -358,16 +72,13 @@ def run_bayesian_inference_SEIR(date_array, cluster_vel_cases_df, cluster_mean_p
     print(np.median(lambda_t - μ, axis=0)[0])
     print()
     print()
-    # --- save path ----
-    root_save_path = f'../../generated/plots/cluster_{cluster_id}/'
-    if os.path.isdir(root_save_path) is False:
-        os.mkdir(root_save_path)
     
     num_cols = 5
     num_rows = int(np.ceil(len(varnames)/num_cols))
     x_size = num_cols * 2.5
     y_size = num_rows * 2.5
 
+    # -------- visualize ---------------
     fig, axes = plt.subplots(num_rows, num_cols, figsize = (x_size, y_size),squeeze=False)
     i_ax = 0
     for i_row, axes_row in enumerate(axes):
@@ -388,7 +99,7 @@ def run_bayesian_inference_SEIR(date_array, cluster_vel_cases_df, cluster_mean_p
     plt.clf()
     
     # -------------------------------------
-    fig, axes = plot_cases(cluster_id, trace, cluster_vel_cases_series, date_begin_sim=date_begin_sim, diff_data_sim=0,
+    fig, axes = plot_cases(cluster_id, trace, localized_mean_vel_cases_series, future_mean_vel_cases_series, date_begin_sim=date_begin_sim, diff_data_sim=0,
                                       colors=('tab:blue', 'tab:green'))
     plt.savefig(root_save_path + 'plot_cases.png')
     
@@ -581,7 +292,7 @@ def SIR_with_change_points(
         for tr_begin, tr_len, lambda_after in zip(
             tr_begin_list, tr_len_list, lambda_list[1:]
         ):
-            lambda_t = mh.smooth_step_function(
+            lambda_t = model_helper.smooth_step_function(
                 start_val=0,
                 end_val=1,
                 t_begin=tr_begin,
@@ -618,7 +329,7 @@ def SIR_with_change_points(
             lambda_t=lambda_t, mu=mu, S_begin=S_begin, I_begin=I_begin, N=N
         )
 
-        new_cases_inferred = mh.delay_cases(
+        new_cases_inferred = model_helper.delay_cases(
             new_I_t=new_I,
             len_new_I_t=num_days_sim,
             len_out=num_days_sim - diff_data_sim,

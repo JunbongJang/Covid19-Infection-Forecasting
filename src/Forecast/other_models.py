@@ -42,6 +42,7 @@ def ARIMA_model(train_y, test_y):
     # residuals.plot(kind='kde')
     # plt.show()
 
+
 def rf_model(train_y, test_y):
     history_days = [x for x in range(len(train_y))]
     history_val = [y for y in train_y]

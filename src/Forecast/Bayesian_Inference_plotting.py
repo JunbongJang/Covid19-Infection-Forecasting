@@ -80,7 +80,7 @@ def plot_hist(model, trace, ax, varname, colors = ('tab:blue', 'tab:orange'), bi
     ax.set_xlabel(varname)
 
 
-def plot_cases(cluster_id, trace, new_cases_obs, date_begin_sim, diff_data_sim, start_date_plot=None, end_date_plot=None,
+def plot_cases(cluster_id, trace, new_cases_obs, future_cases_obs, date_begin_sim, diff_data_sim, start_date_plot=None, end_date_plot=None,
                ylim=None, week_interval=None, colors = ('tab:blue', 'tab:orange')):
     """
     Plots the new cases, the fit, forecast and lambda_t evolution
@@ -107,6 +107,7 @@ def plot_cases(cluster_id, trace, new_cases_obs, date_begin_sim, diff_data_sim, 
 
     new_cases_sim = trace['new_cases']
     len_sim = trace['lambda_t'].shape[1]
+    
     if start_date_plot is None:
         start_date_plot = date_begin_sim + datetime.timedelta(days=diff_data_sim)
     if end_date_plot is None:
@@ -127,9 +128,10 @@ def plot_cases(cluster_id, trace, new_cases_obs, date_begin_sim, diff_data_sim, 
         week_inter_left = week_interval
         week_inter_right = week_interval
 
-    fig, axes = plt.subplots(2, 2, figsize=(9, 5), gridspec_kw={'height_ratios': [1, 3],
-                                                                'width_ratios': [2, 3]})
-
+    fig, axes = plt.subplots(2, 1, figsize=(9, 7))  # , gridspec_kw={'height_ratios': [1, 3], 'width_ratios': [2, 3]}
+    '''
+    axes[0][0].set_visible(False)
+    # --------------------------------------------------------------
     ax = axes[1][0]
     time_arr = np.arange(-len(new_cases_obs), 0)
     mpl_dates = conv_time_to_mpl_dates(time_arr) + diff_data_sim + num_days_data
@@ -146,47 +148,9 @@ def plot_cases(cluster_id, trace, new_cases_obs, date_begin_sim, diff_data_sim, 
     ax.xaxis.set_minor_locator(matplotlib.dates.DayLocator())
     ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%m/%d'))
     ax.set_xlim(start_date_mpl)
-
+    '''
     # --------------------------------------------------------------
-    ax = axes[1][1]
-
-    time1 = np.arange(-len(new_cases_obs) , 0)
-    mpl_dates = conv_time_to_mpl_dates(time1) + diff_data_sim + num_days_data
-    ax.plot(mpl_dates, new_cases_obs, 'd', label='Data', markersize=4, color=colors[0],
-            zorder=5)
-
-    new_cases_past = new_cases_sim[:, :num_days_data]
-    ax.plot(mpl_dates, np.median(new_cases_past, axis=0), '--', color=colors[1], linewidth=1.5, label='Fit with 95% CI')
-    percentiles = np.percentile(new_cases_past, q=2.5, axis=0), np.percentile(new_cases_past, q=97.5, axis=0)
-    ax.fill_between(mpl_dates, percentiles[0], percentiles[1], alpha=0.2, color=colors[1])
-
-    time2 = np.arange(0, num_days_future)
-    mpl_dates_fut = conv_time_to_mpl_dates(time2) + diff_data_sim + num_days_data
-    cases_future = new_cases_sim[:, num_days_data:num_days_data+num_days_future].T
-    median = np.median(cases_future, axis=-1)
-    percentiles = (
-        np.percentile(cases_future, q=2.5, axis=-1),
-        np.percentile(cases_future, q=97.5, axis=-1),
-    )
-    ax.plot(mpl_dates_fut, median, color=colors[1], linewidth=3, label='forecast with 75% and 95% CI')
-    ax.fill_between(mpl_dates_fut, percentiles[0], percentiles[1], alpha=0.1, color=colors[1])
-    ax.fill_between(mpl_dates_fut, np.percentile(cases_future, q=12.5, axis=-1),
-                    np.percentile(cases_future, q=87.5, axis=-1),
-                    alpha=0.2, color=colors[1])
-
-    ax.set_xlabel('Date')
-    ax.set_ylabel(f'New confirmed cases in Cluster {cluster_id}')
-    ax.legend(loc='upper left')
-    ax.set_ylim(0, ylim)
-    func_format = lambda num, _: "${:.0f}\,$k".format(num / 1_000)
-    # ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(func_format))
-    ax.set_xlim(start_date_mpl, end_date_mpl)
-    ax.xaxis.set_major_locator(matplotlib.dates.WeekdayLocator(interval = week_inter_right, byweekday=matplotlib.dates.SU))
-    ax.xaxis.set_minor_locator(matplotlib.dates.DayLocator())
-    ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%m/%d'))
-
-    # --------------------------------------------------------------
-    ax = axes[0][1]
+    ax = axes[0]
 
     time = np.arange(-diff_to_0 , -diff_to_0 + len_sim )
     lambda_t = trace['lambda_t'][:, :]
@@ -203,6 +167,7 @@ def plot_cases(cluster_id, trace, new_cases_obs, date_begin_sim, diff_data_sim, 
     ylims = ax.get_ylim()
     ax.hlines(0, start_date_mpl, end_date_mpl, linestyles=':')
     delay = matplotlib.dates.date2num(date_data_end) - np.percentile(trace['delay'], q=75)
+
     ax.vlines(delay, ylims[0], ylims[1], linestyles='-', colors=['tab:red'])
     ax.set_ylim(*ylims)
     #ax.text(delay + 0.5, ylims[1] - 0.04*np.diff(ylims), 'unconstrained because\nof reporting delay', color='tab:red', verticalalignment='top')
@@ -212,9 +177,62 @@ def plot_cases(cluster_id, trace, new_cases_obs, date_begin_sim, diff_data_sim, 
     ax.xaxis.set_minor_locator(matplotlib.dates.DayLocator())
     ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%m/%d'))
     ax.set_xlim(start_date_mpl, end_date_mpl)
-
+    
     # --------------------------------------------------------------
-    axes[0][0].set_visible(False)
+    ax = axes[1]
+    
+    # plot current data
+    time1 = np.arange(-len(new_cases_obs) , 0)
+    mpl_dates = conv_time_to_mpl_dates(time1) + diff_data_sim + num_days_data
+    ax.plot(mpl_dates, new_cases_obs, 'd', label='Reported Data', markersize=4, color=colors[0],
+            zorder=5)
+            
+    # plot future data
+    future_cases_obs_time = np.arange(-len(future_cases_obs) , 0)
+    future_mpl_dates = conv_time_to_mpl_dates(future_cases_obs_time) + num_days_data + len(future_cases_obs)
+    ax.plot(future_mpl_dates, future_cases_obs, 'd', markersize=4, color=colors[0],
+            zorder=5)
+
+    # plot fit line
+    new_cases_past = new_cases_sim[:, :num_days_data]
+    ax.plot(mpl_dates, np.median(new_cases_past, axis=0), '--', color=colors[1], linewidth=1.5, label='Fit with 95% CI')
+    percentiles = np.percentile(new_cases_past, q=2.5, axis=0), np.percentile(new_cases_past, q=97.5, axis=0)
+    ax.fill_between(mpl_dates, percentiles[0], percentiles[1], alpha=0.2, color=colors[1])
+
+    # plot forecast line
+    time2 = np.arange(0, num_days_future)
+    mpl_dates_fut = conv_time_to_mpl_dates(time2) + diff_data_sim + num_days_data
+    cases_future = new_cases_sim[:, num_days_data:num_days_data+num_days_future].T
+    median = np.median(cases_future, axis=-1)
+    percentiles = (
+        np.percentile(cases_future, q=2.5, axis=-1),
+        np.percentile(cases_future, q=97.5, axis=-1),
+    )
+    ax.plot(mpl_dates_fut, median, color=colors[1], linewidth=3, label='forecast with 75% and 95% CI')
+    ax.fill_between(mpl_dates_fut, percentiles[0], percentiles[1], alpha=0.1, color=colors[1])
+    ax.fill_between(mpl_dates_fut, np.percentile(cases_future, q=12.5, axis=-1),
+                    np.percentile(cases_future, q=87.5, axis=-1),
+                    alpha=0.2, color=colors[1])
+                       
+    # Forecast evaluation metric
+    from sklearn.metrics import mean_squared_error
+    from math import sqrt
+    
+    rmse = sqrt(mean_squared_error(future_cases_obs.to_numpy().tolist(), median))
+    ax.text(0.97, 0.04, 'RMSE:%.3f' % (rmse), color='tab:red', horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
+    
+    # ------------- Decoration ------------------
+    ax.set_xlabel('Date')
+    ax.set_ylabel(f"New confirmed\ncases in Cluster {cluster_id}")
+    ax.legend(loc='upper left')
+    ax.set_ylim(0, ylim)
+    func_format = lambda num, _: "${:.0f}\,$k".format(num / 1_000)
+    # ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(func_format))
+    ax.set_xlim(start_date_mpl, end_date_mpl)
+    ax.xaxis.set_major_locator(matplotlib.dates.WeekdayLocator(interval = week_inter_right, byweekday=matplotlib.dates.SU))
+    ax.xaxis.set_minor_locator(matplotlib.dates.DayLocator())
+    ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%m/%d'))
+
 
     plt.subplots_adjust(wspace=0.4, hspace=.3)
 
