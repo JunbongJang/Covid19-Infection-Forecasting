@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from IPython.core.pylabtools import figsize
+from timeseries_eval import *
 
 def visualize_trace(samples, varname, N_SAMPLES):
     figsize(16, 10)
@@ -153,8 +154,8 @@ def plot_cases(cluster_id, trace, new_cases_obs, future_cases_obs, date_begin_si
     ax = axes[0]
 
     time = np.arange(-diff_to_0 , -diff_to_0 + len_sim )
-    lambda_t = trace['lambda_t'][:, :]
-    μ = trace['mu'][:, None]
+    lambda_t = trace['lambda_t'][:, :]  # spreading rate
+    μ = trace['mu'][:, None]  # recovery rate
     mpl_dates = conv_time_to_mpl_dates(time) + diff_data_sim + num_days_data
 
     ax.plot(mpl_dates, np.median(lambda_t - μ, axis=0), color=colors[1], linewidth=2)
@@ -202,23 +203,21 @@ def plot_cases(cluster_id, trace, new_cases_obs, future_cases_obs, date_begin_si
     # plot forecast line
     time2 = np.arange(0, num_days_future)
     mpl_dates_fut = conv_time_to_mpl_dates(time2) + diff_data_sim + num_days_data
-    cases_future = new_cases_sim[:, num_days_data:num_days_data+num_days_future].T
-    median = np.median(cases_future, axis=-1)
+    cases_forecast = new_cases_sim[:, num_days_data:num_days_data+num_days_future].T
+    
+    median_cases_forecast = np.median(cases_forecast, axis=-1)
     percentiles = (
-        np.percentile(cases_future, q=2.5, axis=-1),
-        np.percentile(cases_future, q=97.5, axis=-1),
+        np.percentile(cases_forecast, q=2.5, axis=-1),
+        np.percentile(cases_forecast, q=97.5, axis=-1),
     )
-    ax.plot(mpl_dates_fut, median, color=colors[1], linewidth=3, label='forecast with 75% and 95% CI')
+    ax.plot(mpl_dates_fut, median_cases_forecast, color=colors[1], linewidth=3, label='forecast with 75% and 95% CI')
     ax.fill_between(mpl_dates_fut, percentiles[0], percentiles[1], alpha=0.1, color=colors[1])
-    ax.fill_between(mpl_dates_fut, np.percentile(cases_future, q=12.5, axis=-1),
-                    np.percentile(cases_future, q=87.5, axis=-1),
+    ax.fill_between(mpl_dates_fut, np.percentile(cases_forecast, q=12.5, axis=-1),
+                    np.percentile(cases_forecast, q=87.5, axis=-1),
                     alpha=0.2, color=colors[1])
                        
     # Forecast evaluation metric
-    from sklearn.metrics import mean_squared_error
-    from math import sqrt
-    
-    rmse = sqrt(mean_squared_error(future_cases_obs.to_numpy().tolist(), median))
+    rmse = rmse_eval(future_cases_obs.to_numpy().tolist(), median_cases_forecast)
     ax.text(0.97, 0.04, 'RMSE:%.3f' % (rmse), color='tab:red', horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
     
     # ------------- Decoration ------------------
@@ -233,7 +232,6 @@ def plot_cases(cluster_id, trace, new_cases_obs, future_cases_obs, date_begin_si
     ax.xaxis.set_minor_locator(matplotlib.dates.DayLocator())
     ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%m/%d'))
 
-
     plt.subplots_adjust(wspace=0.4, hspace=.3)
 
-    return fig, axes
+    return fig, axes, cases_forecast

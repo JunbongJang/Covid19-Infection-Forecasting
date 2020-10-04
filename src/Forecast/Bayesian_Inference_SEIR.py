@@ -17,16 +17,10 @@ import matplotlib.pyplot as plt
 
 from src.Forecast.Bayesian_Inference_plotting import *
 import src.Forecast.Bayesian_Inference_SEIR_helper as model_helper
-from src.Forecast.Bayesian_Inference_SEIR_changepoints import get_change_points
     
-    
-def run_bayesian_inference_SEIR(cluster_vel_cases_df, cluster_mean_population, cluster_id, initial_date, final_date, root_save_path, N_SAMPLES):
-    
-    change_points = get_change_points(final_date=final_date, cluster_id=cluster_id)
-    
-    diff_data_sim = 0 # should be significantly larger than the expected delay, in 
-                   # order to always fit the same number of data points.
-    num_days_future = 14
+
+def process_date_data(cluster_vel_cases_df, initial_date, final_date, num_days_future):
+    diff_data_sim = 0
     date_data_begin = datetime.datetime.strptime(initial_date, '%m/%d/%Y')
     date_data_end = datetime.datetime.strptime(final_date, '%m/%d/%Y')
     
@@ -49,8 +43,14 @@ def run_bayesian_inference_SEIR(cluster_vel_cases_df, cluster_mean_population, c
     localized_mean_vel_cases_series = localized_vel_cases_df.mean(axis=1)
     future_mean_vel_cases_series = future_vel_cases_df.mean(axis=1)
 
-    # ---------------- param setting done--------------
+    return localized_mean_vel_cases_series, future_mean_vel_cases_series, future_vel_cases_df, date_begin_sim, num_days_sim
     
+    
+def run(localized_mean_vel_cases_series, future_mean_vel_cases_series, cluster_mean_population, cluster_id, date_begin_sim, num_days_sim, root_save_path, change_points, N_SAMPLES):
+
+    diff_data_sim = 0 # should be significantly larger than the expected delay, in 
+                   # order to always fit the same number of data points.
+    # ---------------- param setting done--------------
     sir_model = SIR_with_change_points(localized_mean_vel_cases_series.to_numpy(),
                                             change_points_list=change_points,
                                             date_begin_simulation = date_begin_sim,
@@ -69,16 +69,12 @@ def run_bayesian_inference_SEIR(cluster_vel_cases_df, cluster_mean_population, c
     lambda_t = trace['lambda_t'][:, :]
     μ = trace['mu'][:, None]
     
-    print(np.median(lambda_t - μ, axis=0)[0])
-    print()
-    print()
-    
     num_cols = 5
     num_rows = int(np.ceil(len(varnames)/num_cols))
     x_size = num_cols * 2.5
     y_size = num_rows * 2.5
 
-    # -------- visualize ---------------
+    # -------- visualize histogram ---------------
     fig, axes = plt.subplots(num_rows, num_cols, figsize = (x_size, y_size),squeeze=False)
     i_ax = 0
     for i_row, axes_row in enumerate(axes):
@@ -98,10 +94,13 @@ def run_bayesian_inference_SEIR(cluster_vel_cases_df, cluster_mean_population, c
     plt.savefig(root_save_path + 'plot_hist.png')
     plt.clf()
     
-    # -------------------------------------
-    fig, axes = plot_cases(cluster_id, trace, localized_mean_vel_cases_series, future_mean_vel_cases_series, date_begin_sim=date_begin_sim, diff_data_sim=0,
+    # -------- visualize cases ---------------
+    fig, axes, cases_forecast = plot_cases(cluster_id, trace, localized_mean_vel_cases_series, future_mean_vel_cases_series, date_begin_sim=date_begin_sim, diff_data_sim=0,
                                       colors=('tab:blue', 'tab:green'))
     plt.savefig(root_save_path + 'plot_cases.png')
+    plt.clf()
+    
+    np.save(root_save_path + 'cases_forecast.npy', cases_forecast)
     
     
 def SIR_with_change_points(

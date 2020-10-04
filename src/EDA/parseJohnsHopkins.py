@@ -264,16 +264,13 @@ def johnsHopkinsPopulation():
     return population_series
 
 
-def getTzuHsiCluster(chosen_cluster_id, column_date):
-    clusters_df = pd.read_csv(f'../../assets/us_county_clusters.csv', header=0, index_col=False)
+def getTzuHsiClusters(column_date, cluster_type):
+    clusters_df = pd.read_csv(f'../../assets/us_county_clusters_{cluster_type}.csv', header=0, index_col=False)
     clusters_df['State'] = clusters_df['State'].apply(state_to_abbr)
     clusters_df['state_county'] = clusters_df[['State', 'County']].agg('_'.join, axis=1)
     clusters_df = clusters_df.set_index('state_county')
+    print(clusters_df.columns)
     clusters_series = clusters_df[column_date]
 
-    chosen_clusters_series = clusters_series
-    if chosen_cluster_id != 0:
-        chosen_clusters_series = clusters_series[clusters_series == chosen_cluster_id]
-
-    return chosen_clusters_series.index.tolist()
+    return clusters_series 
 
