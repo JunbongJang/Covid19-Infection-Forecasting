@@ -15,38 +15,11 @@ import pymc3 as pm
 import os
 import matplotlib.pyplot as plt
 
-from src.Forecast.Bayesian_Inference_plotting import *
-import src.Forecast.Bayesian_Inference_SEIR_helper as model_helper
-    
-
-def process_date_data(cluster_vel_cases_df, initial_date, final_date, num_days_future):
-    diff_data_sim = 0
-    date_data_begin = datetime.datetime.strptime(initial_date, '%m/%d/%Y')
-    date_data_end = datetime.datetime.strptime(final_date, '%m/%d/%Y')
-    
-    date_begin_sim = date_data_begin - datetime.timedelta(days = diff_data_sim)
-    date_end_sim   = date_data_end   + datetime.timedelta(days = num_days_future) 
-    
-    num_days_sim = (date_end_sim-date_begin_sim + datetime.timedelta(days=1)).days
-    print(date_begin_sim)
-    print(date_end_sim)
-    print(date_data_begin)
-    print(date_data_end)
-    # min-max normalize data
-    for a_column in cluster_vel_cases_df.columns:
-        cluster_vel_cases_df[a_column] = (cluster_vel_cases_df[a_column] - cluster_vel_cases_df[a_column].min()) / (cluster_vel_cases_df[a_column].max() - cluster_vel_cases_df[a_column].min())
-    localized_vel_cases_df = cluster_vel_cases_df.loc[date_data_begin: date_data_end]
-    future_vel_cases_df = cluster_vel_cases_df.loc[date_data_end + datetime.timedelta(days = 1): date_end_sim]
-    print(localized_vel_cases_df.shape)
-    print(future_vel_cases_df.shape)
-    
-    localized_mean_vel_cases_series = localized_vel_cases_df.mean(axis=1)
-    future_mean_vel_cases_series = future_vel_cases_df.mean(axis=1)
-
-    return localized_mean_vel_cases_series, future_mean_vel_cases_series, future_vel_cases_df, date_begin_sim, num_days_sim
+from src.SEIR_Forecast.Bayesian_Inference_plotting import *
+import src.SEIR_Forecast.Bayesian_Inference_SEIR_helper as model_helper
     
     
-def run(localized_mean_vel_cases_series, future_mean_vel_cases_series, cluster_mean_population, cluster_id, date_begin_sim, num_days_sim, root_save_path, change_points, N_SAMPLES):
+def run(localized_mean_vel_cases_series, future_mean_vel_cases_series, cluster_mean_population, cluster_id, date_begin_sim, num_days_sim, cluster_save_path, change_points, N_SAMPLES):
 
     diff_data_sim = 0 # should be significantly larger than the expected delay, in 
                    # order to always fit the same number of data points.
@@ -91,16 +64,16 @@ def run(localized_mean_vel_cases_series, future_mean_vel_cases_series, cluster_m
                 ax.legend()
             i_ax += 1
     fig.subplots_adjust(wspace=0.25, hspace=0.4)
-    plt.savefig(root_save_path + 'plot_hist.png')
+    plt.savefig(cluster_save_path + 'plot_hist.png')
     plt.clf()
     
     # -------- visualize cases ---------------
     fig, axes, cases_forecast = plot_cases(cluster_id, trace, localized_mean_vel_cases_series, future_mean_vel_cases_series, date_begin_sim=date_begin_sim, diff_data_sim=0,
                                       colors=('tab:blue', 'tab:green'))
-    plt.savefig(root_save_path + 'plot_cases.png')
+    plt.savefig(cluster_save_path + 'plot_cases.png')
     plt.clf()
     
-    np.save(root_save_path + 'cases_forecast.npy', cases_forecast)
+    np.save(cluster_save_path + 'cases_forecast.npy', cases_forecast)
     
     
 def SIR_with_change_points(
