@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from IPython.core.pylabtools import figsize
 from timeseries_eval import *
 
+
 def visualize_trace(samples, varname, N_SAMPLES):
     figsize(16, 10)
 
@@ -81,14 +82,14 @@ def plot_hist(model, trace, ax, varname, colors = ('tab:blue', 'tab:orange'), bi
     ax.set_xlabel(varname)
 
 
-def plot_cases(cluster_id, trace, new_cases_obs, future_cases_obs, date_begin_sim, diff_data_sim, start_date_plot=None, end_date_plot=None,
+def plot_cases(cluster_id, trace, current_cases_obs, future_cases_df, date_begin_sim, diff_data_sim, start_date_plot=None, end_date_plot=None,
                ylim=None, week_interval=None, colors = ('tab:blue', 'tab:orange')):
     """
     Plots the new cases, the fit, forecast and lambda_t evolution
     Parameters
     ----------
     trace : trace returned by model
-    new_cases_obs : array
+    current_cases_obs : array
     date_begin_sim : datetime.datetime
     diff_data_sim : float
         Difference in days between the begin of the simulation and the data
@@ -103,6 +104,7 @@ def plot_cases(cluster_id, trace, new_cases_obs, future_cases_obs, date_begin_si
     -------
     figure, axes
     """
+
     def conv_time_to_mpl_dates(arr):
         return matplotlib.dates.date2num([datetime.timedelta(days=float(date)) + date_begin_sim for date in arr])
 
@@ -114,9 +116,11 @@ def plot_cases(cluster_id, trace, new_cases_obs, future_cases_obs, date_begin_si
     if end_date_plot is None:
         end_date_plot = date_begin_sim + datetime.timedelta(days=len_sim)
     if ylim is None:
-        ylim = 1.6*np.max(new_cases_obs)
+        # ylim = 1.6*np.max(current_cases_obs)
+        ylim = 1.6*max(np.max(current_cases_obs), np.max(future_cases_df.sum(axis=1)))
 
-    num_days_data = len(new_cases_obs)
+
+    num_days_data = len(current_cases_obs)
     diff_to_0 = num_days_data + diff_data_sim
     date_data_end = date_begin_sim + datetime.timedelta(days=diff_data_sim + num_days_data)
     num_days_future = (end_date_plot - date_data_end).days
@@ -134,9 +138,9 @@ def plot_cases(cluster_id, trace, new_cases_obs, future_cases_obs, date_begin_si
     axes[0][0].set_visible(False)
     # --------------------------------------------------------------
     ax = axes[1][0]
-    time_arr = np.arange(-len(new_cases_obs), 0)
+    time_arr = np.arange(-len(current_cases_obs), 0)
     mpl_dates = conv_time_to_mpl_dates(time_arr) + diff_data_sim + num_days_data
-    ax.plot(mpl_dates, new_cases_obs, 'd', markersize=6, label='Data', zorder=5, color=colors[0])
+    ax.plot(mpl_dates, current_cases_obs, 'd', markersize=6, label='Data', zorder=5, color=colors[0])
     new_cases_past = new_cases_sim[:, :num_days_data]
     percentiles = np.percentile(new_cases_past, q=2.5, axis=0), np.percentile(new_cases_past, q=97.5, axis=0)
     ax.plot(mpl_dates, np.median(new_cases_past, axis=0), color=colors[1], label='Fit (with 95% CI)')
@@ -183,21 +187,28 @@ def plot_cases(cluster_id, trace, new_cases_obs, future_cases_obs, date_begin_si
     ax = axes[1]
     
     # plot current data
-    time1 = np.arange(-len(new_cases_obs) , 0)
+    time1 = np.arange(-len(current_cases_obs), 0)
     mpl_dates = conv_time_to_mpl_dates(time1) + diff_data_sim + num_days_data
-    ax.plot(mpl_dates, new_cases_obs, 'd', label='Reported Data', markersize=4, color=colors[0],
+    ax.plot(mpl_dates, current_cases_obs, 'd', label='Reported Data', markersize=4, color=colors[0],
             zorder=5)
             
     # plot future data
-    future_cases_obs_time = np.arange(-len(future_cases_obs) , 0)
-    future_mpl_dates = conv_time_to_mpl_dates(future_cases_obs_time) + num_days_data + len(future_cases_obs)
-    ax.plot(future_mpl_dates, future_cases_obs, 'd', markersize=4, color=colors[0],
+    future_total_cases_series = future_cases_df.sum(axis=1)
+    future_total_cases_time = np.arange(-len(future_total_cases_series) , 0)
+    future_mpl_dates = conv_time_to_mpl_dates(future_total_cases_time) + num_days_data + len(future_total_cases_series)
+    ax.plot(future_mpl_dates, future_total_cases_series, 'd', markersize=4, color=colors[0],
             zorder=5)
+
+    for a_county in future_cases_df:
+        ax.plot(future_mpl_dates, future_cases_df[a_county], color=colors[0], linewidth=1, alpha=0.1)
 
     # plot fit line
     new_cases_past = new_cases_sim[:, :num_days_data]
     ax.plot(mpl_dates, np.median(new_cases_past, axis=0), '--', color=colors[1], linewidth=1.5, label='Fit with 95% CI')
-    percentiles = np.percentile(new_cases_past, q=2.5, axis=0), np.percentile(new_cases_past, q=97.5, axis=0)
+    percentiles = (
+        np.percentile(new_cases_past, q=2.5, axis=0),
+        np.percentile(new_cases_past, q=97.5, axis=0)
+    )
     ax.fill_between(mpl_dates, percentiles[0], percentiles[1], alpha=0.2, color=colors[1])
 
     # plot forecast line
@@ -208,7 +219,7 @@ def plot_cases(cluster_id, trace, new_cases_obs, future_cases_obs, date_begin_si
     median_cases_forecast = np.median(cases_forecast, axis=-1)
     percentiles = (
         np.percentile(cases_forecast, q=2.5, axis=-1),
-        np.percentile(cases_forecast, q=97.5, axis=-1),
+        np.percentile(cases_forecast, q=97.5, axis=-1)
     )
     ax.plot(mpl_dates_fut, median_cases_forecast, color=colors[1], linewidth=3, label='forecast with 75% and 95% CI')
     ax.fill_between(mpl_dates_fut, percentiles[0], percentiles[1], alpha=0.1, color=colors[1])
@@ -217,12 +228,12 @@ def plot_cases(cluster_id, trace, new_cases_obs, future_cases_obs, date_begin_si
                     alpha=0.2, color=colors[1])
                        
     # Forecast evaluation metric
-    rmse = rmse_eval(future_cases_obs.to_numpy().tolist(), median_cases_forecast)
+    rmse = rmse_eval(future_total_cases_series.to_numpy().tolist(), median_cases_forecast)
     ax.text(0.97, 0.04, 'RMSE:%.3f' % (rmse), color='tab:red', horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
     
     # ------------- Decoration ------------------
     ax.set_xlabel('Date')
-    ax.set_ylabel(f"New confirmed\ncases in Cluster {cluster_id}")
+    ax.set_ylabel(f"Daily infected\ncases in Cluster {cluster_id}")
     ax.legend(loc='upper left')
     ax.set_ylim(0, ylim)
     func_format = lambda num, _: "${:.0f}\,$k".format(num / 1_000)
@@ -234,4 +245,4 @@ def plot_cases(cluster_id, trace, new_cases_obs, future_cases_obs, date_begin_si
 
     plt.subplots_adjust(wspace=0.4, hspace=.3)
 
-    return fig, axes, cases_forecast
+    return fig, axes, cases_forecast, new_cases_past

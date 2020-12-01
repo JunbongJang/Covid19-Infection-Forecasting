@@ -2,25 +2,27 @@
 Author Junbong Jang
 Date 10/16/2020
 
-functions that visualize the results
+To visualize the timeseries data in line graphs and
+Plot histogram, bar or violin for the prediction evaluation metrics
 '''
 
 from matplotlib import pyplot as plt
 import seaborn as sns
+import numpy as np
 
-def visualize_trend(ax, mean_cases_series, vel_cases_df, days, chosen_cluster, Rnot_index,
-                          Rsquared, Rnot):
+
+def visualize_trend(ax, total_cases_series, cases_df, days, chosen_cluster, Rnot_index, Rsquared, Rnot):
                          
     # plot lines for counties
-    for a_col in vel_cases_df.columns:
-        ax.plot(days, (vel_cases_df[a_col]/20).values.tolist(), linewidth=1) # divide by 10 for visualization
+    for a_col in cases_df.columns:
+        ax.plot(days, cases_df[a_col].values.tolist(), linewidth=1, alpha=0.2) # divide by constant for visualization
     
     # plot a line for mean values of all counties
-    main_line = ax.plot(days, mean_cases_series.values.tolist(), linewidth=3)
+    main_line = ax.plot(days, total_cases_series.values.tolist(), linewidth=3)
     
-    # xtick decoration 
+    # xtick decoration
     from matplotlib.ticker import (MultipleLocator, NullLocator)
-    dates = vel_cases_df.index.tolist()
+    dates = cases_df.index.tolist()
     
     spaced_out_dates=['']  # empty string elem needed because first element is skipped when using set_major_locator
     for date_index in range(0, len(dates)):
@@ -45,17 +47,17 @@ def visualize_trend(ax, mean_cases_series, vel_cases_df, days, chosen_cluster, R
 
     plt.title(f'Reported COVID-19 Case Trend in Cluster {chosen_cluster}', fontsize='x-large')
     plt.xlabel('Dates', fontsize='large')
-    plt.ylabel('New Confirmed\nCases in each day', fontsize='large')
+    plt.ylabel('Daily infected cases', fontsize='large')
 
     return main_line
 
 
-def find_Rnot_index(mean_cases_series):
-    Rnot_max_index = np.argmax(mean_cases_series) + 1
+def find_Rnot_index(total_cases_series):
+    Rnot_max_index = np.argmax(total_cases_series) + 1
     temp_max_cases = 0
     temp_max_counter = 0
     tolerance = 0.01
-    for Rnot_index, one_cases in enumerate(mean_cases_series):
+    for Rnot_index, one_cases in enumerate(total_cases_series):
         temp_max_counter = temp_max_counter + 1
         if one_cases > temp_max_cases + tolerance:
             temp_max_cases = one_cases
@@ -68,28 +70,28 @@ def find_Rnot_index(mean_cases_series):
     return Rnot_index
 
 
-def visualize_trend_with_r_not(chosen_cluster_id, cluster_vel_cases_df, root_save_path):
+def visualize_trend_with_r_not(chosen_cluster_id, cluster_cases_df, root_save_path):
     # min-max normalize data
-    for a_column in cluster_vel_cases_df.columns:
-        cluster_vel_cases_df[a_column] = (cluster_vel_cases_df[a_column] - cluster_vel_cases_df[a_column].min()) / (cluster_vel_cases_df[a_column].max() - cluster_vel_cases_df[a_column].min())
+    # for a_column in cluster_cases_df.columns:
+    #     cluster_cases_df[a_column] = (cluster_cases_df[a_column] - cluster_cases_df[a_column].min()) / (cluster_cases_df[a_column].max() - cluster_cases_df[a_column].min())
     
-    mean_cluster_vel_cases_series = cluster_vel_cases_df.mean(axis=1)
-
-    # process data by summation, log, shortening
-    days = np.linspace(1, mean_cluster_vel_cases_series.size, mean_cluster_vel_cases_series.size)
-    log_mean_cases_series = np.log(mean_cluster_vel_cases_series.values)
+    total_cluster_cases_series = cluster_cases_df.sum(axis=1)
+    days = np.linspace(1, total_cluster_cases_series.size, total_cluster_cases_series.size)
 
     # find Rnot_index
     '''
-    Rnot_index = find_Rnot_index(mean_cluster_vel_cases_series)
+    # process data by summation, log, shortening
+    log_total_cases_series = np.log(total_cluster_cases_series.values)
+    Rnot_index = find_Rnot_index(total_cluster_cases_series)
     print('Rnot_index', Rnot_index)
-    shortening using Rnot_index
-    if np.any(np.isneginf(log_mean_cases_series)):
+    
+    # shortening using Rnot_index
+    if np.any(np.isneginf(log_total_cases_series)):
         score_first = -1
         coef_first = -1
     else:
         infectious_period = 6.6
-        shortened_mean_summed_cases_series = log_mean_cases_series[:Rnot_index]
+        shortened_mean_summed_cases_series = log_total_cases_series[:Rnot_index]
         shortened_days = days[:Rnot_index]
         score, coef, intercept = fit_R(shortened_days.reshape(-1, 1), shortened_mean_summed_cases_series.reshape(-1, 1))
         score_first = round(score, 3)
@@ -99,14 +101,14 @@ def visualize_trend_with_r_not(chosen_cluster_id, cluster_vel_cases_df, root_sav
     coef_first = 0
 
     fig, ax = plt.subplots()
-    main_line = visualize_trend(ax, mean_cluster_vel_cases_series, cluster_vel_cases_df, days, chosen_cluster_id,
+    main_line = visualize_trend(ax, total_cluster_cases_series, cluster_cases_df, days, chosen_cluster_id,
                                       Rnot_index=0,
                                       Rsquared=score_first, Rnot=coef_first)
 
     # draw curve fit line
     '''
-    if not np.any(np.isneginf(log_mean_cases_series)):
-        shortened_mean_summed_cases_series = log_mean_cases_series[:Rnot_index]
+    if not np.any(np.isneginf(log_total_cases_series)):
+        shortened_mean_summed_cases_series = log_total_cases_series[:Rnot_index]
         shortened_days = days[:Rnot_index]
         curve_fit = np.polyfit(shortened_days, shortened_mean_summed_cases_series, 1)
         y_days = np.exp(curve_fit[0] * shortened_days) * np.exp(curve_fit[1])
@@ -122,33 +124,60 @@ def visualize_trend_with_r_not(chosen_cluster_id, cluster_vel_cases_df, root_sav
     plt.close()
 
 
-def bar_rmse_clusters(clusters_num, cluster_rmse_mean_list, title_prefix, cluster_type, root_save_path, save_name, average_of_rmse):
+# ------------------ Visualize Evaluation metrics -----------------------------------
+
+def bar_eval_clusters(clusters_num, cluster_eval_mean_list, average_eval, metric_type, cluster_mode, cluster_type, root_save_path):
     ax = plt.gca()
-    ax.bar(range(clusters_num),cluster_rmse_mean_list)
+    ax.grid(zorder=0, axis='y')
+    ax.bar(range(clusters_num),cluster_eval_mean_list)
     ax.set_xlabel('Cluster ID')
-    ax.set_ylabel('RMSE per cluster')
-    ax.set_title(title_prefix + ' ' + cluster_type)
-    ax.axhline(average_of_rmse, color='red')
-    ax.text(0.97, 0.94, 'Average RMSE:%.3f' % (average_of_rmse), color='tab:red', horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
-    ax.set_ylim(0.075, 0.275)
+    ax.set_ylabel(f'{metric_type} per cluster')
+    ax.set_title(f'{metric_type} {cluster_mode} counties with {cluster_type}')
+    ax.axhline(average_eval, color='red')
+    ax.text(0.97, 0.94, f'Average {metric_type}:%.3f' % average_eval, color='tab:red', horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
+    if metric_type == 'RMSE':
+        ax.set_ylim(0, 120)
+
+    # elif metric_type == 'R^2':
+    #     ax.set_ylim(0, 0.25)
+    #
+    # elif metric_type == 'WAPE' or metric_type == 'MAPE':
+    #     ax.set_ylim(0, 350)
     
-    plt.savefig(root_save_path + f'{save_name}.png')
+    plt.savefig(root_save_path + f'{metric_type}_{cluster_mode}_bar.png')
     plt.close()
 
 
-def violin_mse_clusters(mse_per_cluster_list, root_save_path):
-    ax = sns.violinplot(data=mse_per_cluster_list, cut=0)
-    plt.title('MSE distribution per cluster')
+def violin_eval_clusters(eval_per_cluster_list, metric_type, root_save_path):
+    ax = sns.violinplot(data=eval_per_cluster_list, inner='box', cut=0)
+    eval_length_per_cluster = []
+    for eval_per_cluster in eval_per_cluster_list:  # count number of counties per cluster
+        eval_length_per_cluster.append(len(eval_per_cluster))
+
+    for i, v in enumerate(eval_length_per_cluster):
+        ax.text(i/len(eval_length_per_cluster)+0.05, 0.95, str(v), horizontalalignment='center', color='black', fontweight='bold', transform=ax.transAxes)
+
+    plt.title(f'{metric_type} distribution per cluster')
     plt.xlabel('Cluster ID')
-    plt.ylabel('MSE')
-    plt.savefig(root_save_path + f'mse_violin.png')
+    plt.ylabel(metric_type)
+    # if metric_type == 'MSE':
+    #     ax.set_ylim(0, 0.55)
+    # elif metric_type == 'R^2':
+    #     ax.set_ylim(0, 1)
+    # elif metric_type == 'WAPE' or metric_type == 'MAPE':
+    #     ax.set_ylim(0, 3000)
+
+    plt.savefig(root_save_path + f'{metric_type}_violin.png')
     plt.close()
     
     
-def histogram_clusters(clusters, root_save_path):
-    sns.displot(clusters)
+def histogram_clusters(clusters, clusters_num, root_save_path):
+    ax = plt.gca()
+    sns.displot(clusters, bins=clusters_num)
     plt.title('Counties in each cluster')
     plt.xlabel('Cluster ID')
+    ax.set_ylim(top = 900)
     plt.tight_layout()
+
     plt.savefig(root_save_path + f'cluster_histogram.png')
     plt.close()

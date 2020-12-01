@@ -11,133 +11,269 @@ import numpy as np
 from datetime import date
 import datetime
 import os
-import statistics 
+import statistics
 import math
+import pymc3 as pm
 
-from src.EDA.parseJohnsHopkins import getTzuHsiClusters, johnsHopkinsPopulation
+from src.EDA.parseJohnsHopkins import johnsHopkinsPopulation, getTzuHsiClusters
 from src.SEIR_Forecast import Bayesian_Inference_SEIR
+from src.SEIR_Forecast.Bayesian_Inference_plotting import plot_cases
 from src.SEIR_Forecast.Bayesian_Inference_SEIR_changepoints import get_change_points
 from src.SEIR_Forecast.timeseries_eval import *
-from src.SEIR_Forecast.cycle_helper import *
+from src.SEIR_Forecast.reassignment_helper import *
 from src.SEIR_Forecast.data_processing import *
 from src.SEIR_Forecast.visualizer import *
 
 
-def forecast_main(clusters, cases_df, vel_cases_df, population_df, clusters_num, initial_date, cluster_final_date, final_change_date_list, date_info, num_days_future, forecast_final_date, root_save_path):
-    cluster_rmse_list = []
-    all_mse_list = []
-    mse_per_cluster_list = []
-    
-    for chosen_cluster_id in range(0, clusters_num):  # -1 means all cluster ids. cluster id 0 was not clustered by Tzu Hsi but I still use it
-        print('Cluster ID: ', chosen_cluster_id)
-        
-        # -------------- Data Preprocessing --------------
-        cluster_cases_df, cluster_vel_cases_df, proc_population_df = preprocess_dataset(cases_df.copy(), vel_cases_df.copy(), population_df.copy(), clusters, initial_date, forecast_final_date, chosen_cluster_id)
-        localized_mean_vel_cases_series, future_mean_vel_cases_series, future_vel_cases_df, date_begin_sim, num_days_sim = process_date_data(cluster_vel_cases_df, initial_date=f'{initial_date}/2020', final_date=f'{cluster_final_date}/2020', num_days_future=num_days_future)
+def forecast_main(clusters, cases_df, vel_cases_df, population_df, cluster_mode, init_cluster_num, max_cluster_num, initial_date, final_date, final_change_date, num_days_future, dataset_final_date, run_mode, root_save_path):
+    rmse_per_cluster_list = []
+    mean_rsquared_per_cluster_list = []
+    mape_per_cluster_list = []
+    wape_per_cluster_list = []
 
+    mse_per_county_per_cluster_list = []
+    rsquared_per_county_per_cluster_list = []
+    mape_per_county_per_cluster_list = []
+    wape_per_county_per_cluster_list = []
+
+    unclustered_rmse_per_cluster_list = []
+    unclustered_mse_per_county_per_cluster_list = []
+
+    initial_date = datetime.datetime.strptime(f'{initial_date}/2020', '%m/%d/%Y')
+    final_date = datetime.datetime.strptime(f'{final_date}/2020', '%m/%d/%Y')
+    dataset_final_date = datetime.datetime.strptime(f'{dataset_final_date}/2020', '%m/%d/%Y')
+
+    # cluster id 0 was not clustered by Tzu Hsi but I still use it
+    for cluster_id in range(init_cluster_num, max_cluster_num):
+        if cluster_mode == 'unclustered':
+            cluster_id = 'All'
+            chosen_cluster_series = clusters
+        else:
+            chosen_cluster_series = clusters[clusters == cluster_id]
+        cluster_counties = chosen_cluster_series.index.tolist()
+
+        print('-----------------------------')
+        print('Cluster ID: ', cluster_id)
         # ------------- Create save folders --------------
-        cluster_save_path = root_save_path + f'/cluster_{chosen_cluster_id}/'
+        cluster_save_path = root_save_path + f'/cluster_{cluster_id}/'
         if os.path.isdir(cluster_save_path) is False:
             os.mkdir(cluster_save_path)
 
-        # ---------- Forecast visualization------------
-        visualize_trend_with_r_not(chosen_cluster_id, cluster_vel_cases_df, cluster_save_path)
-        change_points = get_change_points(final_date=f'{cluster_final_date}/2020', final_change_date=final_change_date, cluster_id=chosen_cluster_id)
-        Bayesian_Inference_SEIR.run(localized_mean_vel_cases_series, future_mean_vel_cases_series, proc_population_df.mean(axis=0), chosen_cluster_id,
-                                   date_begin_sim, num_days_sim, cluster_save_path=cluster_save_path, change_points=change_points, N_SAMPLES=10000)
+        # -------------- Data Preprocessing --------------
+        cluster_cases_df, proc_population_series = preprocess_dataset(cases_df.copy(), population_df.copy(), cluster_counties)
+        cluster_vel_cases_df, _ = preprocess_dataset(vel_cases_df.copy(), population_df.copy(), cluster_counties)
 
-        # ---------- evaluation per county -----------
-        cluster_mse_dict = eval_per_county(future_vel_cases_df, num_days_future, cluster_save_path)
-        all_mse_list = all_mse_list + list(cluster_mse_dict.values())
-        cluster_rmse_list.append(math.sqrt(statistics.mean(cluster_mse_dict.values())))
-        print('cluster_mse_dict_values: ', len(cluster_mse_dict.values()))
-        mse_per_cluster_list.append(list(cluster_mse_dict.values()))
+        cluster_cases_df, current_cumulative_cases_df, future_cumulative_cases_df, old_cumulative_infected_cases_series, date_begin_sim, num_days_sim = \
+            process_date(cluster_cases_df, initial_date, final_date, dataset_final_date, num_days_future)
+        cluster_vel_cases_df, current_vel_cases_df, future_vel_cases_df, _, _, _ = \
+            process_date(cluster_vel_cases_df, initial_date, final_date, dataset_final_date, num_days_future)
 
-    return all_mse_list, cluster_rmse_list, mse_per_cluster_list
+        current_cumulative_cases_series = current_cumulative_cases_df.sum(axis=1)
+        current_vel_cases_series = current_vel_cases_df.sum(axis=1)
+        cluster_total_population = proc_population_series.sum()
+        future_cumulative_cases = future_cumulative_cases_df.sum(axis=1)[-1]
+
+        print('old_cumulative_infected_cases_series:', old_cumulative_infected_cases_series)
+        print('Cumulative future cases:', future_cumulative_cases)
+        print('population:', cluster_total_population)
+        print('Remaining population:', cluster_total_population - future_cumulative_cases)
+
+        visualize_trend_with_r_not(cluster_id, cluster_vel_cases_df, cluster_save_path)
+
+        # --------------- Get SIR Model -----------------
+        # convert cumulative infected to daily total infected cases
+        current_total_cases_series = current_cumulative_cases_series - old_cumulative_infected_cases_series.sum()
+        future_total_cases_df = future_cumulative_cases_df - old_cumulative_infected_cases_series
+
+        day_1_cumulative_infected_cases = current_cumulative_cases_series[0]
+        S_begin_beta = cluster_total_population - day_1_cumulative_infected_cases
+        I_begin_beta = current_total_cases_series[0]  # day 1 total infected cases
+
+        print('day_1_cumulative_infected_cases: ', day_1_cumulative_infected_cases)
+        print('S_begin_beta: ', S_begin_beta)
+        print('I_begin_beta: ', I_begin_beta)
+
+        change_points = get_change_points(final_date, final_change_date, cluster_id)
+        sir_model = Bayesian_Inference_SEIR.SIR_with_change_points(S_begin_beta,
+                                                                   I_begin_beta,
+                                                                   current_vel_cases_series.to_numpy(),  # current_total_cases_series.to_numpy(),
+                                                                   change_points_list=change_points,
+                                                                   date_begin_simulation=date_begin_sim,
+                                                                   num_days_sim=num_days_sim,
+                                                                   diff_data_sim=0,
+                                                                   N=cluster_total_population)
+
+        # ---------- Estimate Parameters for SIR model ------------
+        if run_mode == 'train':
+            Bayesian_Inference_SEIR.run(sir_model, N_SAMPLES=10000, cluster_save_path=cluster_save_path)
+
+        elif run_mode == 'eval':
+            # ----------- Forecast visualization ---------------
+            trace = pm.load_trace(cluster_save_path + 'sir_model.trace', model=sir_model)
+            fig, axes, cases_forecast, cases_past = plot_cases(cluster_id, trace, current_vel_cases_series,
+                                                              future_vel_cases_df, date_begin_sim, diff_data_sim=0,
+                                                              colors=('tab:blue', 'tab:green'))
+            # fig, axes, cases_forecast, cases_past = plot_cases(cluster_id, trace, current_total_cases_series,
+            #                                                        future_total_cases_df, date_begin_sim, diff_data_sim=0,
+            #                                                        colors=('tab:blue', 'tab:green'))
+
+            np.save(cluster_save_path + 'cases_forecast.npy', cases_forecast)
+            np.save(cluster_save_path + 'cases_past.npy', cases_past)
+            plt.savefig(cluster_save_path + 'plot_cases.png')
+            plt.clf()
+
+            # ---------- Evaluation per county -----------
+            susceptible_series = proc_population_series - current_cumulative_cases_df.loc[final_date]
+            print(proc_population_series)
+            print(current_cumulative_cases_df.loc[final_date])
+            print(susceptible_series)
+            #cluster_mse_dict, cluster_rsquared_dict, cluster_mape_dict, cluster_wape_dict = eval_per_cluster(cluster_cases_df.loc[final_date], future_total_cases_df, proc_population_series, num_days_future, cluster_save_path)
+            cluster_mse_dict, cluster_rsquared_dict, cluster_mape_dict, cluster_wape_dict = eval_per_cluster(
+                cluster_vel_cases_df.loc[final_date], susceptible_series, future_vel_cases_df, proc_population_series, num_days_future,
+                cluster_save_path)
+
+            if cluster_mode == 'unclustered':
+                for cluster_id in range(0, max_cluster_num):
+                    local_mse_list = []
+                    chosen_cluster_series = clusters[clusters == cluster_id]
+                    cluster_counties = chosen_cluster_series.index.tolist()
+                    for a_county in cluster_counties:
+                        if a_county in cluster_mse_dict:
+                            local_mse_list.append(cluster_mse_dict[a_county])
+                    unclustered_rmse_per_cluster_list.append(math.sqrt(statistics.mean(local_mse_list)))
+                    unclustered_mse_per_county_per_cluster_list.append(local_mse_list)
+
+            elif cluster_mode == 'clustered':
+                rmse_per_cluster_list.append(math.sqrt(statistics.mean(cluster_mse_dict.values())))
+                mean_rsquared_per_cluster_list.append(statistics.mean(cluster_rsquared_dict.values()))
+                # mape_per_cluster_list.append(statistics.mean(cluster_mape_dict.values()))
+                wape_per_cluster_list.append(statistics.mean(cluster_wape_dict.values()))
+
+                mse_per_county_per_cluster_list.append(list(cluster_mse_dict.values()))
+                rsquared_per_county_per_cluster_list.append(list(cluster_rsquared_dict.values()))
+                mape_per_county_per_cluster_list.append(list(cluster_mape_dict.values()))
+                wape_per_county_per_cluster_list.append(list(cluster_wape_dict.values()))
+
+        if cluster_mode == 'unclustered':
+            break  # only run once for unclustered dataset
+
+    return rmse_per_cluster_list, mse_per_county_per_cluster_list, mean_rsquared_per_cluster_list, rsquared_per_county_per_cluster_list, \
+           mape_per_cluster_list, mape_per_county_per_cluster_list, wape_per_cluster_list, wape_per_county_per_cluster_list, \
+           unclustered_rmse_per_cluster_list, unclustered_mse_per_county_per_cluster_list
 
 
 if __name__ == "__main__":
     # Fitting the SEIR model to the data and estimating the parameters with the cluster id.
-
-    forecast_final_date = '8/12'
-    num_days_future = 14
+    dataset_final_date = '8/1'
     cluster_type = "no_constants"
+    run_mode = 'eval'
+    cluster_mode = 'clustered'
 
     # initial_date_list = ['3/15', '4/1', '4/15', '5/1', '5/15']
-    # cluster_final_date_list = ['4/30', '5/15', '5/31', '6/15', '6/30']
+    # final_date_list = ['4/30', '5/15', '5/31', '6/15', '6/30']
     # final_change_date_list = [datetime.datetime(2020, 4, 15), datetime.datetime(2020, 4, 30), datetime.datetime(2020, 5, 15), datetime.datetime(2020, 5, 31), datetime.datetime(2020, 6, 15)]
 
     initial_date_list = ['5/1']
-    cluster_final_date_list = ['6/15']
-    final_change_date_list = [datetime.datetime(2020, 5, 31)]
-    for initial_date, cluster_final_date, final_change_date in zip(initial_date_list,  cluster_final_date_list, final_change_date_list):
+    final_date_list = ['6/15']
+    final_change_date_list = [datetime.datetime(2020, 6, 5)]
+
+    for initial_date, final_date, final_change_date in zip(initial_date_list, final_date_list, final_change_date_list):
         # load data
-        initial_clusters = getTzuHsiClusters(column_date=f"{initial_date}~{cluster_final_date}", cluster_type=cluster_type)
-        clusters_num = len(initial_clusters.unique())
+        initial_clusters = getTzuHsiClusters(column_date=f"{initial_date}~{final_date}", cluster_type=cluster_type)
+        max_cluster_num = len(initial_clusters.unique())
         cases_df = pd.read_csv(f'../../generated/us_cases_counties.csv', header=0, index_col=0)
         vel_cases_df = pd.read_csv(f'../../generated/us_velocity_cases_counties.csv', header=0, index_col=0)
         population_df = johnsHopkinsPopulation()
-        # population_df = pd.read_csv(f'../../generated/us_population_counties.csv', header=0, index_col=0)
-        
+
         # set save path
-        date_info = f'{initial_date.replace("/","-")}_{cluster_final_date.replace("/","-")}_{forecast_final_date.replace("/","-")}_{final_change_date.strftime("%m-%d")}_{cluster_type}'
+        date_info = f'{initial_date.replace("/","-")}_{final_date.replace("/","-")}_{dataset_final_date.replace("/","-")}_{final_change_date.strftime("%m-%d")}_{cluster_type}'
         root_save_path = f'../../generated/plots/{date_info}/'
         if os.path.isdir(root_save_path) is False:
-            os.mkdir(root_save_path)    
-        
+            os.mkdir(root_save_path)
+
         # initial Parameters
         reassigned_clusters = initial_clusters
         REASSIGN_COUNTER_MAX = 5
-        # load cluster data from intermediate reassign num
-        reassign_counter_init = 0
+        reassign_counter_init = 0  # to load cluster data from intermediate reassign num
+        init_cluster_num = 0
+
+        if run_mode == 'eval':
+            max_cluster_num = max_cluster_num - 1  # remove cluster 11 as a outlier
+
+        if cluster_mode == 'unclustered':
+            if run_mode == 'train':
+                REASSIGN_COUNTER_MAX = 1
+            elif run_mode == 'eval':
+                REASSIGN_COUNTER_MAX = 1
+
         # root_save_path = f'../../generated/plots/{date_info}/reassign_{reassign_counter_init-1}/'
         # reassigned_clusters = pd.read_csv(root_save_path + f'clusters.csv', header=0, index_col=0)
         # reassigned_clusters = reassigned_clusters.iloc[:, 0]
-        # reassigned_clusters = reassign_county(reassigned_clusters, clusters_num, cases_df, vel_cases_df, population_df, initial_date, cluster_final_date, forecast_final_date, num_days_future, root_save_path)
-        
-        # visualize clusters histogram
-        # for reassign_counter in range(reassign_counter_init, REASSIGN_COUNTER_MAX):
-            # root_save_path = f'../../generated/plots/{date_info}/reassign_{reassign_counter}/'
-            # reassigned_clusters = pd.read_csv(root_save_path + f'clusters.csv', header=0, index_col=0)
-            # reassigned_clusters = reassigned_clusters.iloc[:, 0]
-            # histogram_clusters(reassigned_clusters, root_save_path)
-            
-        # Run Cycle Model
+        # reassigned_clusters = reassign_county(reassigned_clusters, max_cluster_num, cases_df, population_df, initial_date, final_date, num_days_future, root_save_path)
+
+        # -------------- Run Cycle Model ------------------------
         for reassign_counter in range(reassign_counter_init, REASSIGN_COUNTER_MAX):
+            print('reassign_counter: ', reassign_counter)
+            if reassign_counter < REASSIGN_COUNTER_MAX - 1:
+                num_days_future = 7  # only validation set
+            else:
+                num_days_future = 14  # validation + test set
+
             root_save_path = f'../../generated/plots/{date_info}/reassign_{reassign_counter}/'
-            if os.path.isdir(root_save_path) is False:
-                os.mkdir(root_save_path)    
-            reassigned_clusters.to_csv(root_save_path + f'clusters.csv')  # save current county assignment to clusters
-        
+            if run_mode == 'eval':  # load reassigned data
+                reassigned_clusters = pd.read_csv(root_save_path + f'clusters.csv', header=0, index_col=0)
+                reassigned_clusters = reassigned_clusters.iloc[:, 0]
+            elif run_mode == 'train':
+                if os.path.isdir(root_save_path) is False:
+                    os.mkdir(root_save_path)
+                reassigned_clusters.to_csv(root_save_path + f'clusters.csv')  # save current county assignment to clusters
+            print(reassigned_clusters)
+
             # ------------ Forecast -----------------
-            all_mse_list, cluster_rmse_list, mse_per_cluster_list = forecast_main(reassigned_clusters, cases_df, vel_cases_df, population_df, clusters_num, initial_date, cluster_final_date, final_change_date_list, date_info, num_days_future, forecast_final_date, root_save_path)
-            
-            # ------------ Evaluation ---------------
-            print('RMSE num:', len(all_mse_list))
+            rmse_per_cluster_list, mse_per_county_per_cluster_list, mean_rsquared_per_cluster_list, rsquared_per_county_per_cluster_list, \
+             mape_per_cluster_list, mape_per_county_per_cluster_list, wape_per_cluster_list, wape_per_county_per_cluster_list, \
+            unclustered_rmse_per_cluster_list, unclustered_mse_per_county_per_cluster_list \
+                = forecast_main(reassigned_clusters, cases_df, vel_cases_df, population_df, cluster_mode, init_cluster_num, max_cluster_num, initial_date, final_date, final_change_date, num_days_future, dataset_final_date, run_mode, root_save_path)
 
-            # --- for clustered dataset
-            violin_mse_clusters(mse_per_cluster_list, root_save_path)
-            average_of_rmse = round(math.sqrt(statistics.mean(all_mse_list)), 3)
-            bar_rmse_clusters(clusters_num, cluster_rmse_list, 'RMSE of counties clustered with',
-                              cluster_type, root_save_path, 'rmse_bar', average_of_rmse)
-
-            # --- for unclustered dataset
-            # unclustered_rmse_list = []
-            # for chosen_cluster_id in range(0, clusters_num):
-            #     print(chosen_cluster_id)
-            #     local_mse_list = []
-            #     chosen_cluster_series = reassigned_clusters[reassigned_clusters == chosen_cluster_id]
-            #     cluster_counties = chosen_cluster_series.index.tolist()
-            #     for a_county in cluster_counties:
-            #         if a_county in cluster_mse_dict:
-            #             local_mse_list.append(cluster_mse_dict[a_county])
-            #     unclustered_rmse_list.append(math.sqrt(statistics.mean(local_mse_list)))
-            # print(unclustered_rmse_list)
-            #
-            # average_of_rmse = round(statistics.mean(unclustered_rmse_list),3)
-            # bar_rmse_clusters(clusters_num, unclustered_rmse_list, 'RMSE of unclustered counties', cluster_type, date_info, 'unclustered_rmse_bar', average_of_rmse)
-            
             # ------------------------------
-            reassigned_clusters = reassign_county(reassigned_clusters, clusters_num, cases_df, vel_cases_df, population_df, initial_date, cluster_final_date, forecast_final_date, num_days_future, root_save_path)
-            
+            if run_mode == 'train':
+                if reassign_counter < REASSIGN_COUNTER_MAX - 1:
+                    reassigned_clusters = reassign_county(reassigned_clusters, max_cluster_num, cases_df, vel_cases_df,
+                                                          population_df, initial_date, final_date,
+                                                          num_days_future, root_save_path)
 
+            # ------------ Evaluation ---------------
+            if run_mode == 'eval':
+                if cluster_mode == 'clustered':
+                    all_mse_list = [j for sub in mse_per_county_per_cluster_list for j in sub]
+                    all_rsquared_list = [j for sub in rsquared_per_county_per_cluster_list for j in sub]
+                    all_mape_list = [j for sub in mape_per_county_per_cluster_list for j in sub]
+                    all_wape_list = [j for sub in wape_per_county_per_cluster_list for j in sub]
+                    average_of_rmse = round(math.sqrt(statistics.mean(all_mse_list)), 3)
+                    average_of_rsquared = round(statistics.mean(all_rsquared_list), 3)
+                    average_of_mape = round(statistics.mean(all_mape_list), 3)
+                    average_of_wape = round(statistics.mean(all_wape_list), 3)
+                    print('Evaluated counties:', len(all_mse_list), len(all_rsquared_list), len(all_mape_list), len(all_wape_list))
+
+                    # --- for clustered dataset
+                    histogram_clusters(reassigned_clusters, max_cluster_num, root_save_path)
+
+                    violin_eval_clusters(mse_per_county_per_cluster_list, 'MSE', root_save_path)
+                    violin_eval_clusters(rsquared_per_county_per_cluster_list, 'R^2', root_save_path)
+                    violin_eval_clusters(mape_per_county_per_cluster_list, 'MAPE', root_save_path)
+                    violin_eval_clusters(wape_per_county_per_cluster_list, 'WAPE', root_save_path)
+
+                    bar_eval_clusters(max_cluster_num, rmse_per_cluster_list, average_of_rmse, 'RMSE', cluster_mode,
+                                      cluster_type, root_save_path)
+                    bar_eval_clusters(max_cluster_num, mean_rsquared_per_cluster_list, average_of_rsquared, 'R^2', cluster_mode,
+                                      cluster_type, root_save_path)
+                    # bar_eval_clusters(max_cluster_num, mape_per_cluster_list, average_of_mape, 'MAPE', cluster_mode,
+                    #                   cluster_type, root_save_path)
+                    bar_eval_clusters(max_cluster_num, wape_per_cluster_list, average_of_wape, 'WAPE', cluster_mode,
+                                      cluster_type, root_save_path)
+
+                elif cluster_mode == 'unclustered':
+                    all_mse_list = [j for sub in unclustered_mse_per_county_per_cluster_list for j in sub]
+                    average_of_rmse = round(math.sqrt(statistics.mean(all_mse_list)), 3)
+                    bar_eval_clusters(max_cluster_num, unclustered_rmse_per_cluster_list, average_of_rmse, 'RMSE', cluster_mode,
+                                      cluster_type, root_save_path)

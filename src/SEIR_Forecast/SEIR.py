@@ -43,7 +43,7 @@ def SEIR(N, t, lockdown_day, chosen_county):
     y0 = S0, E0, I0, R0  # Initial conditions vector
 
     # Integrate the SIR equations over the time grid, t.
-    ret = odeint(deriv, y0, t, args=(N, beta, gamma, delta))
+    ret = odeint(seir_deriv, y0, t, args=(N, beta, gamma, delta))
     S, E, I, R = ret.T
 
     plotseird(t, S, E, I, R,chosen_county)
@@ -51,50 +51,13 @@ def SEIR(N, t, lockdown_day, chosen_county):
     return I
 
 
-def SEIR_actual_graph(N, t, I, R, chosen_county):
-    '''
-    Creates graph of grount truth susceptible, infected and recovered in a county
-    that resembles the SEIR model graph.
-    :param N:
-    :param t:
-    :param I:
-    :param R:
-    :param chosen_county:
-    :return:
-    '''
-    S = N-I
-    plotsir(t, S, I, R, chosen_county)
-
-    return I
-
-
-def deriv(y, t, N, beta, gamma, delta):
+def seir_deriv(y, t, N, beta, gamma, delta):
     S, E, I, R = y
     dSdt = -1 * beta(t) * S * I / N
     dEdt = beta(t) * S * I / N - delta * E
     dIdt = delta * E - gamma * I
     dRdt = gamma * I
     return dSdt, dEdt, dIdt, dRdt
-
-
-def plotsir(t, S, I, R,chosen_county):
-    f, ax = plt.subplots(1,1,figsize=(10,4))
-    ax.plot(t, S, 'b', alpha=0.7, linewidth=2, label='Susceptible')
-    ax.plot(t, I, 'y', alpha=0.7, linewidth=2, label='Infected')
-    ax.plot(t, R, 'g', alpha=0.7, linewidth=2, label='Recovered')
-    ax.plot(t, S + I, 'c--', alpha=0.7, linewidth=2, label='Total')
-
-    ax.set_xlabel('Time (days)')
-    ax.set_title(f'SIR model of {chosen_county}', fontsize='x-large')
-
-    ax.yaxis.set_tick_params(length=0)
-    ax.xaxis.set_tick_params(length=0)
-    ax.grid(b=True, which='major', c='w', lw=2, ls='-')
-    legend = ax.legend()
-    legend.get_frame().set_alpha(0.5)
-    for spine in ('top', 'right', 'bottom', 'left'):
-      ax.spines[spine].set_visible(False)
-    plt.show()
 
 
 def plotseird(t, S, E, I, R, chosen_county, D=None, L=None, R0=None, Alpha=None):

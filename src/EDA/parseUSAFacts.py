@@ -6,6 +6,7 @@ Parses USAFacts Covid-19 Data into Velocity data
 '''
 import urllib.request
 import pandas as pd
+from parseData import correct_county_name_from_df
 
 
 def download_raw_data(file_type):
@@ -28,7 +29,9 @@ def parseData(file_type):
 
     # create state_county column for loop optimization
     raw_df['state_county'] = raw_df[['State', 'County Name']].agg('_'.join, axis=1)
-    raw_df['state_county'] = raw_df['state_county'].str.replace(r' County$', '')
+    raw_df['state_county'] = raw_df['state_county'].str.lower()
+    raw_df = correct_county_name_from_df(raw_df)
+
     raw_df.sort_values(by=['state_county'])
 
     # remove statewide unallocated rows
@@ -53,7 +56,7 @@ def parseData(file_type):
     return processed_df
 
 
-def cumulativeCasesToVelocity(file_type, processed_df):
+def cumulativeCasesToVelocity(file_type, processed_df, save_csv=False):
     state_counties = processed_df.columns.tolist()
     velocity_df = pd.DataFrame().reindex_like(processed_df)
 
@@ -63,7 +66,8 @@ def cumulativeCasesToVelocity(file_type, processed_df):
             velocity_df.loc[date,state_county] = processed_df.loc[date, state_county] - prev_cases
             prev_cases = processed_df.loc[date, state_county]
 
-    velocity_df.to_csv(f'../../generated/us_velocity_{file_type}_counties.csv', index=True)
+    if save_csv:
+        velocity_df.to_csv(f'../../generated/us_velocity_{file_type}_counties.csv', index=True)
     return velocity_df
 
 

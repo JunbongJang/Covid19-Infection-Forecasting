@@ -19,35 +19,26 @@ from src.SEIR_Forecast.Bayesian_Inference_plotting import *
 import src.SEIR_Forecast.Bayesian_Inference_SEIR_helper as model_helper
     
     
-def run(localized_mean_vel_cases_series, future_mean_vel_cases_series, cluster_mean_population, cluster_id, date_begin_sim, num_days_sim, cluster_save_path, change_points, N_SAMPLES):
-
-    diff_data_sim = 0 # should be significantly larger than the expected delay, in 
-                   # order to always fit the same number of data points.
-    # ---------------- param setting done--------------
-    sir_model = SIR_with_change_points(localized_mean_vel_cases_series.to_numpy(),
-                                            change_points_list=change_points,
-                                            date_begin_simulation = date_begin_sim,
-                                            num_days_sim = num_days_sim,
-                                            diff_data_sim = diff_data_sim,
-                                            N=cluster_mean_population)
+def run(sir_model, N_SAMPLES, cluster_save_path):
 
     with sir_model:
         trace = pm.sample(N_SAMPLES, model=sir_model, step=pm.Metropolis())
-    
-    # -------- visualize ready ---------------
+    pm.save_trace(trace, cluster_save_path + 'sir_model.trace', overwrite=True)
+
+    # -------- prepare data for visualization ---------------
     varnames = get_all_free_RVs_names(sir_model)
     #for varname in varnames:
         #visualize_trace(trace[varname][:, None], varname, N_SAMPLES)
         
-    lambda_t = trace['lambda_t'][:, :]
-    μ = trace['mu'][:, None]
-    
+    lambda_t = np.median(trace['lambda_t'][:, :], axis=0)
+    μ = np.median(trace['mu'][:, None], axis=0)
+
+    # -------- visualize histogram ---------------
     num_cols = 5
     num_rows = int(np.ceil(len(varnames)/num_cols))
     x_size = num_cols * 2.5
     y_size = num_rows * 2.5
 
-    # -------- visualize histogram ---------------
     fig, axes = plt.subplots(num_rows, num_cols, figsize = (x_size, y_size),squeeze=False)
     i_ax = 0
     for i_row, axes_row in enumerate(axes):
@@ -66,17 +57,14 @@ def run(localized_mean_vel_cases_series, future_mean_vel_cases_series, cluster_m
     fig.subplots_adjust(wspace=0.25, hspace=0.4)
     plt.savefig(cluster_save_path + 'plot_hist.png')
     plt.clf()
-    
-    # -------- visualize cases ---------------
-    fig, axes, cases_forecast = plot_cases(cluster_id, trace, localized_mean_vel_cases_series, future_mean_vel_cases_series, date_begin_sim=date_begin_sim, diff_data_sim=0,
-                                      colors=('tab:blue', 'tab:green'))
-    plt.savefig(cluster_save_path + 'plot_cases.png')
-    plt.clf()
-    
-    np.save(cluster_save_path + 'cases_forecast.npy', cases_forecast)
+
+    np.save(cluster_save_path + 'varnames.npy', varnames)
+    np.save(cluster_save_path + 'SIR_params.npy', [lambda_t, μ])
     
     
 def SIR_with_change_points(
+    S_begin_beta,
+    I_begin_beta,
     new_cases_obs,
     change_points_list,
     date_begin_simulation,
@@ -111,6 +99,8 @@ def SIR_with_change_points(
             `new_cases_obs`. This is necessary so the model can fit the reporting delay.
             Set this parameter to a value larger than what you expect to find
             for the reporting delay.
+            should be significantly larger than the expected delay,
+            in order to always fit the same number of data points.
         N : number
             The population size. For Germany, we used 83e6
         priors_dict : dict
@@ -144,7 +134,7 @@ def SIR_with_change_points(
         priors_dict = dict()
 
     default_priors = dict(
-        pr_beta_I_begin=100.0,
+        pr_beta_I_begin=10000.0,
         pr_median_lambda_0=0.4,
         pr_sigma_lambda_0=0.5,
         pr_median_mu=1 / 8,
@@ -208,8 +198,12 @@ def SIR_with_change_points(
     with pm.Model() as model:
         # all pm functions now apply on the model instance
         # true cases at begin of loaded data but we do not know the real number
-        I_begin = pm.HalfCauchy(name="I_begin", beta=priors_dict["pr_beta_I_begin"])
+        I_begin = pm.Normal(name="I_begin", mu=I_begin_beta, sigma=I_begin_beta/10)
+        S_begin = pm.Normal(name="S_begin", mu=S_begin_beta, sigma=S_begin_beta/10)
+        # S_begin = N - I_begin
 
+        # I_begin_print = tt.printing.Print('I_begin')(I_begin)
+        # S_begin_print = tt.printing.Print('S_begin')(S_begin)
         # fraction of people that are newly infected each day
         lambda_list = []
         lambda_list.append(
@@ -296,7 +290,6 @@ def SIR_with_change_points(
         # training the model with loaded data provided as argument
         # -------------------------------------------------------------------------- #
 
-        S_begin = N - I_begin
         S, I, new_I = _SIR_model(
             lambda_t=lambda_t, mu=mu, S_begin=S_begin, I_begin=I_begin, N=N
         )

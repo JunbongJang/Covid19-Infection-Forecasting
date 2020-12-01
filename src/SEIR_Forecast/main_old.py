@@ -97,7 +97,7 @@ if __name__ == "__main__":
 
     # fit model
     predicted_s = SEIR(chosen_population, range(len(chosen_vel_df.values)), lockdown_day, chosen_county)
-    actual_s = SEIR_actual_graph(chosen_population, range(len(chosen_cases_df.values)), chosen_cases_df[chosen_county].values.tolist(), chosen_recovered_df.values.tolist(), chosen_county)
+    actual_s = SEIR_ground_truth(chosen_population, range(len(chosen_cases_df.values)), chosen_cases_df[chosen_county].values.tolist(), chosen_recovered_df.values.tolist(), chosen_county)
 
     # evaluate model
     evaluate_predictions(actual_s, predicted_s)
