@@ -9,6 +9,7 @@ Plot histogram, bar or violin for the prediction evaluation metrics
 from matplotlib import pyplot as plt
 import seaborn as sns
 import numpy as np
+import pandas as pd
 
 
 def visualize_trend(ax, total_cases_series, cases_df, days, chosen_cluster, Rnot_index, Rsquared, Rnot):
@@ -125,6 +126,35 @@ def visualize_trend_with_r_not(chosen_cluster_id, cluster_cases_df, root_save_pa
 
 
 # ------------------ Visualize Evaluation metrics -----------------------------------
+def bar_eval_clusters_compare(clustered_rmse_list, unclustered_rmse_list,
+                              clustered_average_rmse, unclustered_average_rmse, metric_type, root_save_path):
+    # process data
+    assert len(clustered_rmse_list) == len(unclustered_rmse_list)
+    total_rmse_list = clustered_rmse_list + unclustered_rmse_list
+
+    cluster_id_list = [i for i in range(len(clustered_rmse_list))] + [i for i in range(len(unclustered_rmse_list))]
+    clustered_type_list = ['clustered' for i in range(len(clustered_rmse_list))] + ['unclustered' for i in range(len(unclustered_rmse_list))]
+    rmse_df = pd.DataFrame(list(zip(total_rmse_list, cluster_id_list, clustered_type_list)),
+                 columns=['rmse', 'cluster_id', 'cluster_type'])
+
+    # visualize data
+    plot_colors = sns.color_palette('muted')
+    sns.barplot( data=rmse_df, x="cluster_id", y="rmse", hue="cluster_type", palette=plot_colors )
+    plt.xlabel("Cluster ID")
+    plt.ylabel(metric_type)
+    plt.legend(loc='upper left')
+    plt.title(f"Comparison of {metric_type} per cluster")
+
+    ax = plt.gca()
+    ax.text(0.97, 0.93, f'Average {metric_type}:%.3f' % clustered_average_rmse, color=plot_colors[0], horizontalalignment='right',
+            verticalalignment='bottom', transform=ax.transAxes)
+    ax.text(0.97, 0.88, f'Average {metric_type}:%.3f' % unclustered_average_rmse, color=plot_colors[3], horizontalalignment='right',
+            verticalalignment='bottom', transform=ax.transAxes)
+
+    plt.tight_layout()
+    plt.savefig(root_save_path + f'{metric_type}_all_clusters_compare_bar.png')
+    plt.close()
+
 
 def bar_eval_clusters(clusters_num, cluster_eval_mean_list, average_eval, metric_type, cluster_mode, cluster_type, root_save_path):
     ax = plt.gca()
@@ -135,15 +165,16 @@ def bar_eval_clusters(clusters_num, cluster_eval_mean_list, average_eval, metric
     ax.set_title(f'{metric_type} {cluster_mode} counties with {cluster_type}')
     ax.axhline(average_eval, color='red')
     ax.text(0.97, 0.94, f'Average {metric_type}:%.3f' % average_eval, color='tab:red', horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
-    if metric_type == 'RMSE':
-        ax.set_ylim(0, 120)
+    # if metric_type == 'RMSE':
+    #     ax.set_ylim(0, 120)
 
     # elif metric_type == 'R^2':
     #     ax.set_ylim(0, 0.25)
     #
     # elif metric_type == 'WAPE' or metric_type == 'MAPE':
     #     ax.set_ylim(0, 350)
-    
+
+    plt.tight_layout()
     plt.savefig(root_save_path + f'{metric_type}_{cluster_mode}_bar.png')
     plt.close()
 
@@ -167,6 +198,7 @@ def violin_eval_clusters(eval_per_cluster_list, metric_type, root_save_path):
     # elif metric_type == 'WAPE' or metric_type == 'MAPE':
     #     ax.set_ylim(0, 3000)
 
+    plt.tight_layout()
     plt.savefig(root_save_path + f'{metric_type}_violin.png')
     plt.close()
     
@@ -176,8 +208,8 @@ def histogram_clusters(clusters, clusters_num, root_save_path):
     sns.displot(clusters, bins=clusters_num)
     plt.title('Counties in each cluster')
     plt.xlabel('Cluster ID')
-    ax.set_ylim(top = 900)
-    plt.tight_layout()
+    # ax.set_ylim(top = 900)
 
+    plt.tight_layout()
     plt.savefig(root_save_path + f'cluster_histogram.png')
     plt.close()

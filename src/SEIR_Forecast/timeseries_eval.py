@@ -10,7 +10,7 @@ from math import sqrt, isnan, isinf
 import numpy as np
 import statistics
 from scipy import stats
-from src.SEIR_Forecast import SIR
+from src.SEIR_Forecast.SIR import sir_forecast_a_county
 
 
 def rmse_eval(future_cases_obs, median_cases_forecast):
@@ -33,6 +33,22 @@ def mse_eval(future_cases_obs, median_cases_forecast):
         squared_error_sum = squared_error_sum + squared_error
     
     return squared_error_sum/errors_num
+
+
+def relative_error_eval(future_cases_obs, median_cases_forecast):
+    # errors = (future_cases_obs - median_cases_forecast) / future_cases_obs
+    # errors_num = len(errors)
+    #
+    # squared_error_sum = 0
+    # for error in errors:
+    #     squared_error = error ** 2
+    #     squared_error_sum = squared_error_sum + squared_error
+
+    # error = (sum(future_cases_obs) - sum(median_cases_forecast))**2 / sum(future_cases_obs)**2
+    # return error
+
+    y_true, y_pred = np.array(future_cases_obs), np.array(median_cases_forecast)
+    return np.sum(np.abs(y_true - y_pred)) / np.sum(y_true)
 
 
 def r_squared_eval(future_cases_obs, median_cases_forecast):
@@ -62,7 +78,7 @@ def get_median_cluster_cases_forecast(cluster_save_path):
     return np.median(cluster_cases_forecast, axis=-1)
 
 
-def eval_per_cluster(cases_series_at_final_date, susceptible_series, future_cases_df, proc_population_series, num_days_future, cluster_save_path):
+def eval_per_cluster(susceptible_series, averaged_infected_series, future_cases_df, proc_population_series, num_days_future, cluster_save_path):
 
     # replace median forecast below
     median_cluster_cases_forecast = get_median_cluster_cases_forecast(cluster_save_path)
@@ -72,17 +88,19 @@ def eval_per_cluster(cases_series_at_final_date, susceptible_series, future_case
     t = range(len(future_cases_df.values))
 
     cluster_mse_dict = {}
+    cluster_mse_relative_dict = {}
     cluster_rsquared_dict = {}
     cluster_mape_dict = {}
     cluster_wape_dict = {}
     future_cases_df = future_cases_df.fillna(0)
     for county in future_cases_df.columns:
-        county_case_forecast = sir_forecast_a_county(susceptible_series[county], cases_series_at_final_date[county], proc_population_series[county], t, beta, gamma, county, cluster_save_path)
+        county_case_forecast = sir_forecast_a_county(susceptible_series[county], averaged_infected_series[county], proc_population_series[county], t, beta, gamma, county, cluster_save_path)
         # print(median_cluster_cases_forecast)
-        mse, r_squared, mape, wape = eval_a_county(future_cases_df[county].tolist(), county_case_forecast)
-
+        mse, mse_relative, r_squared, mape, wape = eval_a_county(future_cases_df[county].tolist(), county_case_forecast)
         cluster_mse_dict[county] = mse
 
+        if not isnan(mse_relative) and not isinf(mse_relative):
+            cluster_mse_relative_dict[county] = mse_relative
         if not isinf(mape):
             cluster_mape_dict[county] = mape
         if not isinf(wape):
@@ -93,26 +111,17 @@ def eval_per_cluster(cases_series_at_final_date, susceptible_series, future_case
         assert len(future_cases_df[county].tolist()) == num_days_future
         assert len(future_cases_df[county].tolist()) == len(median_cluster_cases_forecast)
 
-    return cluster_mse_dict, cluster_rsquared_dict, cluster_mape_dict, cluster_wape_dict
+    return cluster_mse_dict, cluster_mse_relative_dict, cluster_rsquared_dict, cluster_mape_dict, cluster_wape_dict
 
 
 def eval_a_county(county_future_vel_cases, median_cluster_cases_forecast):
     mse = mse_eval(county_future_vel_cases, median_cluster_cases_forecast)
+    relative_error = relative_error_eval(county_future_vel_cases, median_cluster_cases_forecast)
     r_squared = r_squared_eval(county_future_vel_cases, median_cluster_cases_forecast)
     mape = mape_eval(county_future_vel_cases, median_cluster_cases_forecast)
     wape = wape_eval(county_future_vel_cases, median_cluster_cases_forecast)
 
-    # print(mse, mape, wape)
-
-    return mse, r_squared, mape, wape
-
-
-def sir_forecast_a_county(S0, I0, N, t, beta, gamma, a_county, save_path):
-    S, I, R = SIR.run(S0, I0, N, t, beta, gamma)
-    # print('sir_forecast_a_county')
-    # print(S,I,R, N, I0, t, beta, gamma, a_county)
-    # plotsir(t, S, I, R, county, save_path)
-    return I
+    return mse, relative_error, r_squared, mape, wape
 
 
 def get_outlier_threshold_from_list(input_list):
@@ -131,6 +140,14 @@ def get_outlier_threshold_from_list(input_list):
 
     return upper_outlier_threshold
 
+
+def moving_average_from_df(input_df):
+    return input_df.iloc[-5:].mean(axis=0)
+
+
+def average_from_list_of_list(error_county_per_cluster_list):
+    all_error_list = [j for sub in error_county_per_cluster_list for j in sub]
+    return statistics.mean(all_error_list)
 
 
 if __name__ == "__main__":

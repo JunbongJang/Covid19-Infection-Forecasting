@@ -24,7 +24,8 @@ def get_change_points(final_date, final_change_date, cluster_id):
         prior_date_2 = datetime.datetime(2020, 5, 1)
         prior_date_3 = datetime.datetime(2020, 5, 8)
         
-    elif final_date == datetime.datetime(2020, 6, 15):
+    elif final_date == datetime.datetime(2020, 6, 15) or final_date == datetime.datetime(2020, 6, 18) or \
+            final_date == datetime.datetime(2020, 6, 8) or final_date == datetime.datetime(2020, 6, 13):
         prior_date_1 = datetime.datetime(2020, 5, 10)
         prior_date_2 = datetime.datetime(2020, 5, 17)
         prior_date_3 = datetime.datetime(2020, 5, 24)

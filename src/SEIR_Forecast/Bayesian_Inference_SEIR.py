@@ -20,11 +20,11 @@ import src.SEIR_Forecast.Bayesian_Inference_SEIR_helper as model_helper
     
     
 def run(sir_model, N_SAMPLES, cluster_save_path):
-
+    print('sample start')
     with sir_model:
-        trace = pm.sample(N_SAMPLES, model=sir_model, step=pm.Metropolis())
+        trace = pm.sample(N_SAMPLES, model=sir_model, step=pm.Metropolis(), progressbar=True)
     pm.save_trace(trace, cluster_save_path + 'sir_model.trace', overwrite=True)
-
+    print('sample end')
     # -------- prepare data for visualization ---------------
     varnames = get_all_free_RVs_names(sir_model)
     #for varname in varnames:
@@ -61,7 +61,7 @@ def run(sir_model, N_SAMPLES, cluster_save_path):
     np.save(cluster_save_path + 'varnames.npy', varnames)
     np.save(cluster_save_path + 'SIR_params.npy', [lambda_t, μ])
     
-    
+
 def SIR_with_change_points(
     S_begin_beta,
     I_begin_beta,
@@ -72,8 +72,7 @@ def SIR_with_change_points(
     diff_data_sim,
     N,
     priors_dict=None,
-    weekends_modulated=False,
-    weekend_modulation_type = 'step'
+    weekends_modulated=False
 ):
     """
         Parameters
@@ -135,13 +134,13 @@ def SIR_with_change_points(
 
     default_priors = dict(
         pr_beta_I_begin=10000.0,
-        pr_median_lambda_0=0.4,
+        pr_median_lambda_0=0.2,
         pr_sigma_lambda_0=0.5,
         pr_median_mu=1 / 8,
         pr_sigma_mu=0.2,
-        pr_median_delay=8.0,
+        pr_median_delay= 1.0,
         pr_sigma_delay=0.2,
-        pr_beta_sigma_obs=10.0,
+        pr_beta_sigma_obs=5.0,
         week_end_days = (6,7),
         pr_mean_weekend_factor=0.7,
         pr_sigma_weekend_factor=0.17
@@ -171,21 +170,13 @@ def SIR_with_change_points(
     for prior_name, value in default_priors.items():
         if prior_name not in priors_dict:
             priors_dict[prior_name] = value
-            print(f"{prior_name} was set to default value {value}")
+            # print(f"{prior_name} was set to default value {value}")
     for prior_name, value in default_priors_change_points.items():
         for i_cp, change_point in enumerate(change_points_list):
             if prior_name not in change_point:
                 change_point[prior_name] = value
-                print(
-                    f"{prior_name} of change point {i_cp} was set to default value {value}"
-                )
+                # print(f"{prior_name} of change point {i_cp} was set to default value {value}")
 
-    if (
-        diff_data_sim
-        < priors_dict["pr_median_delay"]
-        + 3 * priors_dict["pr_median_delay"] * priors_dict["pr_sigma_delay"]
-    ):
-        print("WARNING: diff_data_sim could be to small compared to the prior delay")
     if num_days_sim < len(new_cases_obs) + diff_data_sim:
         raise RuntimeError(
             "Simulation ends before the end of the data. Increase num_days_sim."
@@ -230,8 +221,7 @@ def SIR_with_change_points(
             if dt_before is not None and dt_before > dt_begin_transient:
                 raise RuntimeError("Dates of change points are not temporally ordered")
 
-            prior_mean = (
-                dt_begin_transient - date_begin_simulation).days - 1  # convert the provided date format (argument) into days (a number)
+            prior_mean = (dt_begin_transient - date_begin_simulation).days # - 1  # convert the provided date format (argument) into days (a number)
 
             tr_begin = pm.Normal(
                 name=f"transient_begin_{i}",
@@ -277,11 +267,11 @@ def SIR_with_change_points(
         )
 
         # delay in days between contracting the disease and being recorded
-        delay = pm.Lognormal(
-            name="delay",
-            mu=np.log(priors_dict["pr_median_delay"]),
-            sigma=priors_dict["pr_sigma_delay"],
-        )
+        # delay = pm.Lognormal(
+        #     name="delay",
+        #     mu=np.log(priors_dict["pr_median_delay"]),
+        #     sigma=priors_dict["pr_sigma_delay"],
+        # )
 
         # prior of the error of observed cases
         sigma_obs = pm.HalfCauchy("sigma_obs", beta=priors_dict["pr_beta_sigma_obs"])
@@ -294,13 +284,15 @@ def SIR_with_change_points(
             lambda_t=lambda_t, mu=mu, S_begin=S_begin, I_begin=I_begin, N=N
         )
 
-        new_cases_inferred = model_helper.delay_cases(
-            new_I_t=new_I,
-            len_new_I_t=num_days_sim,
-            len_out=num_days_sim - diff_data_sim,
-            delay=delay,
-            delay_diff=diff_data_sim,
-        )
+        # ignore this delay
+        # new_cases_inferred = model_helper.delay_cases(
+        #     new_I_t=new_I,
+        #     len_new_I_t=num_days_sim,
+        #     len_out=num_days_sim - diff_data_sim,
+        #     delay=delay,
+        #     delay_diff=diff_data_sim,
+        # )
+        new_cases_inferred = new_I
 
         # likelihood of the model:
         # observed cases are distributed following studentT around the model.

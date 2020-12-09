@@ -68,3 +68,11 @@ def plotsir(t, S, I, R, county, save_path):
       ax.spines[spine].set_visible(False)
 
     plt.savefig(f'{save_path}sir_{county}.png')
+
+
+def sir_forecast_a_county(S0, I0, N, t, beta, gamma, a_county, save_path):
+    S, I, R = run(S0, I0, N, t, beta, gamma)
+    # print('sir_forecast_a_county', S,I,R, N, I0, t, beta, gamma, a_county)
+    # if a_county != '' and save_path != '':
+        # plotsir(t, S, I, R, county, save_path)
+    return I
